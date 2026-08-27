@@ -2051,6 +2051,7 @@ namespace SpellEditor
 
                     row.EndEdit();
                     adapter.CommitChanges(query, q.GetChanges());
+                    SpellDBC.ClearRecordCache();
 
                     ShowFlyoutMessage($"Saved spell {selectedID}.");
 
@@ -2220,11 +2221,37 @@ namespace SpellEditor
 
         private void SpellDescriptionGen_TextChanged(object sender, TextChangedEventArgs e) => SpellGenRefresh(sender as ThreadSafeTextBox, 0);
         private void SpellTooltipGen_TextChanged(object sender, TextChangedEventArgs e) => SpellGenRefresh(sender as ThreadSafeTextBox, 1);
+        // Held between keystrokes so a burst of typing only costs one parse
+        private DispatcherTimer _spellGenTimer;
+        private ThreadSafeTextBox _spellGenSender;
+        private int _spellGenType;
+
         private void SpellGenRefresh(ThreadSafeTextBox sender, int type)
         {
+            _spellGenSender = sender;
+            _spellGenType = type;
+            if (_spellGenTimer == null)
+            {
+                _spellGenTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+                _spellGenTimer.Tick += (s, e) =>
+                {
+                    _spellGenTimer.Stop();
+                    SpellGenRefreshNow(_spellGenSender, _spellGenType);
+                };
+            }
+            _spellGenTimer.Stop();
+            _spellGenTimer.Start();
+        }
+
+        private void SpellGenRefreshNow(ThreadSafeTextBox sender, int type)
+        {
+            if (sender == null)
+                return;
             if (!int.TryParse(sender.Name[sender.Name.Length - 1].ToString(), out int locale))
                 return;
             var spell = GetSpellRowById(selectedID);
+            if (spell == null)
+                return;
             var text = SpellStringParser.ParseString(sender.Text, spell, this);
             if (type == 0)
                 spellDescGenFields[locale].ThreadSafeText = text;
@@ -3071,6 +3098,7 @@ namespace SpellEditor
         {
             _currentVisualController = null;
             adapter.Updating = true;
+            SpellDBC.ClearRecordCache();
             updateProgress("Querying MySQL data...");
             var data = adapter.Query($"SELECT * FROM `spell` WHERE `ID` = '{selectedID}'");
             var rowResult = data.Rows;
@@ -5340,7 +5368,7 @@ namespace SpellEditor
             }
         }
 
-        public DataRow GetSpellRowById(uint spellId) => adapter.Query($"SELECT * FROM `{"spell"}` WHERE `ID` = '{spellId}' LIMIT 1").Rows[0];
+        public DataRow GetSpellRowById(uint spellId) => SpellDBC.GetRecordById(spellId, this);
 
         public string GetSpellNameById(uint spellId)
         {
