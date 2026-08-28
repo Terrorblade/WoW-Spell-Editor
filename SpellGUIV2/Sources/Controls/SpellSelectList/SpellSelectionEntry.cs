@@ -183,6 +183,11 @@ namespace SpellEditor.Sources.Controls.SpellSelectList
             InvokePasteAction();
         }
 
+        public override void CopyIdItemClick(object sender, RoutedEventArgs args)
+        {
+            Clipboard.SetDataObject(GetSpellId().ToString(), true);
+        }
+
         public override void DeleteItemClick(object sender, RoutedEventArgs args)
         {
             if (_ConfirmDeletePanel != null)

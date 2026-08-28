@@ -776,16 +776,8 @@ namespace SpellEditor
 
         public void ReloadCurrentSpellFromDatabase()
         {
-            try
-            {
-                updating = true;
-                // Silent progress updater
-                loadSpell(_ => { });
-            }
-            finally
-            {
-                updating = false;
-            }
+            SpellDBC.InvalidateRecord(selectedID);
+            UpdateMainWindow();
         }
 
         public void ApplyAiSpellDefinition(AiSpellDefinition def)
@@ -1181,7 +1173,7 @@ namespace SpellEditor
         {
             try
             {
-                var count = uint.Parse(adapter.Query("SELECT COUNT(*) FROM `spell`").Rows[0][0].ToString());
+                var count = uint.Parse((await adapter.QuerySingleValueAsync("SELECT COUNT(*) FROM `spell`")).ToString());
                 if (count > 0)
                     return;
 
@@ -2042,7 +2034,7 @@ namespace SpellEditor
 
                     row.EndEdit();
                     adapter.CommitChanges(query, q.GetChanges());
-                    SpellDBC.ClearRecordCache();
+                    SpellDBC.InvalidateRecord(selectedID);
 
                     ShowFlyoutMessage($"Saved spell {selectedID}.");
 
@@ -2146,24 +2138,59 @@ namespace SpellEditor
             adapter.Execute($"UPDATE `{"spell"}` SET `{column}` = '{newIconID}' WHERE `ID` = '{selectedID}'");
         }
 
+        private static readonly Regex SpellReferenceRegex = new Regex(@"\$(\d+)", RegexOptions.Compiled);
+
+        // Runs off the UI thread. Fetches the selected spell live and pulls every spell its
+        // description or tooltip references in one extra query so loadSpell needs none.
+        private DataTable PrefetchSpell(uint spellId)
+        {
+            var data = adapter.Query($"SELECT * FROM `spell` WHERE `ID` = '{spellId}'");
+            SpellDBC.SeedRecordCache(data);
+            if (data.Rows.Count != 1)
+                return data;
+
+            var row = data.Rows[0];
+            var referenced = new HashSet<uint>();
+            foreach (DataColumn column in data.Columns)
+            {
+                if (!column.ColumnName.StartsWith("SpellDescription") && !column.ColumnName.StartsWith("SpellTooltip"))
+                    continue;
+                var text = row[column].ToString();
+                if (text.IndexOf('$') < 0)
+                    continue;
+                foreach (Match match in SpellReferenceRegex.Matches(text))
+                {
+                    if (uint.TryParse(match.Groups[1].Value, out var id) && id != spellId && !SpellDBC.IsCached(id))
+                        referenced.Add(id);
+                }
+            }
+            if (referenced.Count > 0)
+                SpellDBC.SeedRecordCache(adapter.Query($"SELECT * FROM `spell` WHERE `ID` IN ({string.Join(",", referenced)})"));
+            return data;
+        }
+
         private async void UpdateMainWindow()
         {
-            ProgressDialogController controller = null;
+            var spellId = selectedID;
             try
             {
                 updating = true;
 
-                loadSpell(LoadSpellReporter);
+                var data = await Task.Run(() => PrefetchSpell(spellId));
+                // A newer selection landed while we were waiting, let that one win
+                if (spellId != selectedID)
+                    return;
 
-                updating = false;
+                loadSpell(LoadSpellReporter, data);
             }
-
             catch (Exception ex)
             {
-                updating = false;
-                if (controller != null)
-                    await controller.CloseAsync();
                 HandleErrorMessage(ex.Message);
+            }
+            finally
+            {
+                if (spellId == selectedID)
+                    updating = false;
             }
         }
 
@@ -3071,13 +3098,11 @@ namespace SpellEditor
         }
 
         #endregion
-        private void loadSpell(UpdateTextFunc updateProgress)
+        // Runs on the UI thread and must stay query free, the row is prefetched by UpdateMainWindow
+        private void loadSpell(UpdateTextFunc updateProgress, DataTable data)
         {
             _currentVisualController = null;
             adapter.Updating = true;
-            SpellDBC.ClearRecordCache();
-            updateProgress("Querying MySQL data...");
-            var data = adapter.Query($"SELECT * FROM `spell` WHERE `ID` = '{selectedID}'");
             var rowResult = data.Rows;
             if (rowResult == null || rowResult.Count != 1)
                 throw new Exception("An error occurred trying to select spell ID: " + selectedID);
@@ -3271,8 +3296,8 @@ namespace SpellEditor
                 }
                 updateProgress("Updating spell focus object selection...");
                 var loadFocusObjects = (SpellFocusObject)DBCManager.GetInstance().FindDbcForBinding("SpellFocusObject");
-                RequiresSpellFocus.ThreadSafeIndex = loadFocusObjects.UpdateSpellFocusObjectSelection(uint.Parse(
-                    adapter.Query($"SELECT `RequiresSpellFocus` FROM `{"spell"}` WHERE `ID` = '{selectedID}'").Rows[0][0].ToString()));
+                RequiresSpellFocus.ThreadSafeIndex = loadFocusObjects.UpdateSpellFocusObjectSelection(
+                    uint.Parse(row["RequiresSpellFocus"].ToString()));
 
                 if (isTbcOrGreater)
                 {
@@ -3287,8 +3312,8 @@ namespace SpellEditor
 
                 updateProgress("Updating cast time selection...");
                 var loadCastTimes = (SpellCastTimes)DBCManager.GetInstance().FindDbcForBinding("SpellCastTimes");
-                CastTime.ThreadSafeIndex = loadCastTimes.UpdateCastTimeSelection(uint.Parse(adapter.Query(
-                    $"SELECT `CastingTimeIndex` FROM `{"spell"}` WHERE `ID` = '{selectedID}'").Rows[0][0].ToString()));
+                CastTime.ThreadSafeIndex = loadCastTimes.UpdateCastTimeSelection(
+                    uint.Parse(row["CastingTimeIndex"].ToString()));
                 updateProgress("Updating other stuff...");
                 RecoveryTime.ThreadSafeText = uint.Parse(row["RecoveryTime"].ToString());
                 CategoryRecoveryTime.ThreadSafeText = uint.Parse(row["CategoryRecoveryTime"].ToString());
@@ -3369,8 +3394,8 @@ namespace SpellEditor
                 SpellLevel.ThreadSafeText = uint.Parse(row["SpellLevel"].ToString());
 
                 var loadDurations = (SpellDuration)DBCManager.GetInstance().FindDbcForBinding("SpellDuration");
-                Duration.ThreadSafeIndex = loadDurations.UpdateDurationIndexes(uint.Parse(adapter.Query(
-                    $"SELECT `DurationIndex` FROM `{"spell"}` WHERE `ID` = '{selectedID}'").Rows[0][0].ToString()));
+                Duration.ThreadSafeIndex = loadDurations.UpdateDurationIndexes(
+                    uint.Parse(row["DurationIndex"].ToString()));
 
                 uint powerType = uint.Parse(row["PowerType"].ToString());
                 // Manually handle 'Health' power type
@@ -3392,8 +3417,8 @@ namespace SpellEditor
                 }
                 updateProgress("Updating spell range selection...");
                 var loadRanges = (SpellRange)DBCManager.GetInstance().FindDbcForBinding("SpellRange");
-                Range.ThreadSafeIndex = loadRanges.UpdateSpellRangeSelection(uint.Parse(adapter.Query(
-                    $"SELECT `RangeIndex` FROM `{"spell"}` WHERE `ID` = '{selectedID}'").Rows[0][0].ToString()));
+                Range.ThreadSafeIndex = loadRanges.UpdateSpellRangeSelection(
+                    uint.Parse(row["RangeIndex"].ToString()));
 
                 updateProgress("Updating speed, stacks, totems, reagents...");
                 Speed.ThreadSafeText = row["Speed"].ToString();
@@ -3418,8 +3443,7 @@ namespace SpellEditor
                 ReagentCount8.ThreadSafeText = row["ReagentCount8"].ToString();
 
                 updateProgress("Updating item class selection...");
-                int ID = int.Parse(adapter.Query(
-                    $"SELECT `EquippedItemClass` FROM `{"spell"}` WHERE `ID` = '{selectedID}'").Rows[0][0].ToString());
+                int ID = int.Parse(row["EquippedItemClass"].ToString());
                 if (ID == -1)
                 {
                     EquippedItemClass.ThreadSafeIndex = 0;
@@ -3509,8 +3533,9 @@ namespace SpellEditor
 
                 updateProgress("Updating radius index...");
                 var loadRadiuses = (SpellRadius)DBCManager.GetInstance().FindDbcForBinding("SpellRadius");
-                var result = adapter.Query($"SELECT `EffectRadiusIndex1`, `EffectRadiusIndex2`, `EffectRadiusIndex3` FROM `{"spell"}` WHERE `ID` = '{selectedID}'").Rows[0];
-                uint[] IDs = { uint.Parse(result[0].ToString()), uint.Parse(result[1].ToString()), uint.Parse(result[2].ToString()) };
+                uint[] IDs = { uint.Parse(row["EffectRadiusIndex1"].ToString()),
+                    uint.Parse(row["EffectRadiusIndex2"].ToString()),
+                    uint.Parse(row["EffectRadiusIndex3"].ToString()) };
                 RadiusIndex1.ThreadSafeIndex = loadRadiuses.UpdateRadiusIndexes(IDs[0]);
                 RadiusIndex2.ThreadSafeIndex = loadRadiuses.UpdateRadiusIndexes(IDs[1]);
                 RadiusIndex3.ThreadSafeIndex = loadRadiuses.UpdateRadiusIndexes(IDs[2]);
@@ -3617,8 +3642,7 @@ namespace SpellEditor
                 {
                     updateProgress("Updating totem categories & load area groups...");
                     var loadTotemCategories = (TotemCategory)DBCManager.GetInstance().FindDbcForBinding("TotemCategory");
-                    result = adapter.Query($"SELECT `TotemCategory1`, `TotemCategory2` FROM `{"spell"}` WHERE `ID` = '{selectedID}'").Rows[0];
-                    IDs = new[] { uint.Parse(result[0].ToString()), uint.Parse(result[1].ToString()) };
+                    IDs = new[] { uint.Parse(row["TotemCategory1"].ToString()), uint.Parse(row["TotemCategory2"].ToString()) };
                     TotemCategory1.ThreadSafeIndex = loadTotemCategories.UpdateTotemCategoriesSelection(IDs[0]);
                     TotemCategory2.ThreadSafeIndex = loadTotemCategories.UpdateTotemCategoriesSelection(IDs[1]);
                 }
@@ -3627,8 +3651,8 @@ namespace SpellEditor
                 if (isWotlkOrGreater)
                 {
                     var loadAreaGroups = (AreaGroup)DBCManager.GetInstance().FindDbcForBinding("AreaGroup");
-                    AreaGroup.ThreadSafeIndex = loadAreaGroups.UpdateAreaGroupSelection(uint.Parse(adapter.Query(
-                        $"SELECT `AreaGroupID` FROM `{"spell"}` WHERE `ID` = '{selectedID}'").Rows[0][0].ToString()));
+                    AreaGroup.ThreadSafeIndex = loadAreaGroups.UpdateAreaGroupSelection(
+                        uint.Parse(row["AreaGroupID"].ToString()));
                 }
                 AreaGroup.IsEnabled = isWotlkOrGreater;
 
@@ -3660,8 +3684,8 @@ namespace SpellEditor
                 {
                     updateProgress("Updating rune costs...");
                     var loadRuneCosts = (SpellRuneCost)DBCManager.GetInstance().FindDbcForBinding("SpellRuneCost");
-                    RuneCost.ThreadSafeIndex = loadRuneCosts.UpdateSpellRuneCostSelection(uint.Parse(adapter.Query(
-                        $"SELECT `RuneCostID` FROM `{"spell"}` WHERE `ID` = '{selectedID}'").Rows[0][0].ToString()));
+                    RuneCost.ThreadSafeIndex = loadRuneCosts.UpdateSpellRuneCostSelection(
+                        uint.Parse(row["RuneCostID"].ToString()));
                 }
                 RuneCost.IsEnabled = isWotlkOrGreater;
 
@@ -3683,10 +3707,10 @@ namespace SpellEditor
                     var loadDifficulties = (SpellDifficulty)DBCManager.GetInstance().FindDbcForBinding("SpellDifficulty");
                     var loadDescriptionVariables = (SpellDescriptionVariables)DBCManager.GetInstance().FindDbcForBinding("SpellDescriptionVariables");
                     SpellDescriptionVariables.ThreadSafeIndex = loadDescriptionVariables.UpdateSpellDescriptionVariablesSelection(
-                        uint.Parse(adapter.Query($"SELECT `SpellDescriptionVariableID` FROM `{"spell"}` WHERE `ID` = '{selectedID}'").Rows[0][0].ToString()));
+                        uint.Parse(row["SpellDescriptionVariableID"].ToString()));
 
-                    Difficulty.ThreadSafeIndex = loadDifficulties.UpdateDifficultySelection(uint.Parse(adapter.Query(
-                        $"SELECT `SpellDifficultyID` FROM `{"spell"}` WHERE `ID` = '{selectedID}'").Rows[0][0].ToString()));
+                    Difficulty.ThreadSafeIndex = loadDifficulties.UpdateDifficultySelection(
+                        uint.Parse(row["SpellDifficultyID"].ToString()));
                 }
                 SpellMissileID.IsEnabled = isWotlkOrGreater;
                 SpellDescriptionVariables.IsEnabled = isWotlkOrGreater;
@@ -5376,34 +5400,36 @@ namespace SpellEditor
             }
         }
 
-        private void FilterSpellEffectCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private async void FilterSpellEffectCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (e.OriginalSource != FilterSpellEffectCombo)
             {
                 return;
             }
-            
+
             var box = sender as ComboBox;
             var selected = box.SelectedItem?.ToString() ?? "0 ";
             var id = int.Parse(selected.Substring(0, selected.IndexOf(' ')));
-            var view = CollectionViewSource.GetDefaultView(SelectSpell.Items);
             // Clear filter if id is 0
             if (id == 0)
             {
-                view.Filter = obj => true;
+                CollectionViewSource.GetDefaultView(SelectSpell.Items).Filter = obj => true;
                 return;
             }
-            // Collect all spell ID's with the effect id
-            var matchingSpells = adapter.Query($"SELECT id FROM spell WHERE Effect1 = {id} or Effect2 = {id} or Effect3 = {id}").Rows;
+            await ApplySpellIdFilterAsync($"Effect1 = {id} or Effect2 = {id} or Effect3 = {id}");
+        }
+
+        private async Task ApplySpellIdFilterAsync(string whereClause)
+        {
+            var matchingSpells = (await adapter.QueryAsync($"SELECT id FROM spell WHERE {whereClause}")).Rows;
             var matchingSpellsSet = new HashSet<string>();
             foreach (DataRow record in matchingSpells)
-            {
                 matchingSpellsSet.Add(record[0].ToString());
-            }
-            // Apply filter
-            view.Filter = obj =>
+
+            CollectionViewSource.GetDefaultView(SelectSpell.Items).Filter = obj =>
             {
-                var panel = obj as StackPanel;
+                if (!(obj is StackPanel panel))
+                    return false;
                 using (var enumerator = panel.GetChildObjects().GetEnumerator())
                 {
                     while (enumerator.MoveNext())
@@ -5411,20 +5437,14 @@ namespace SpellEditor
                         if (!(enumerator.Current is TextBlock block))
                             continue;
                         var name = block.Text.TrimStart();
-                        var blockId = name.Substring(0, name.IndexOf(' '));
-                        return matchingSpellsSet.Contains(blockId);
+                        return matchingSpellsSet.Contains(name.Substring(0, name.IndexOf(' ')));
                     }
                 }
                 return false;
             };
         }
 
-        private void ApplyFilter(HashSet<string> set)
-        {
-
-        }
-
-        private void FilterCategoryCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private async void FilterCategoryCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (e.OriginalSource != FilterCategoryCombo)
             {
@@ -5433,44 +5453,18 @@ namespace SpellEditor
             var box = sender as ThreadSafeComboBox;
             string selected = box.SelectedItem?.ToString() ?? "0 -";
 
-            int id = 0;
+            int id = GetNumberPrefixFromText(selected);
 
-            id = GetNumberPrefixFromText(selected);
-
-            var view = CollectionViewSource.GetDefaultView(SelectSpell.Items);
             // Clear filter if id is 0
             if (id == 0)
             {
-                view.Filter = obj => true;
+                CollectionViewSource.GetDefaultView(SelectSpell.Items).Filter = obj => true;
                 return;
             }
-            // Collect all spell ID's with the family id
-            var matchingSpells = adapter.Query($"SELECT id FROM spell WHERE Category = {id}").Rows;
-            var matchingSpellsSet = new HashSet<string>();
-            foreach (DataRow record in matchingSpells)
-            {
-                matchingSpellsSet.Add(record[0].ToString());
-            }
-            // Apply filter
-            view.Filter = obj =>
-            {
-                var panel = obj as StackPanel;
-                using (var enumerator = panel.GetChildObjects().GetEnumerator())
-                {
-                    while (enumerator.MoveNext())
-                    {
-                        if (!(enumerator.Current is TextBlock block))
-                            continue;
-                        var name = block.Text.TrimStart();
-                        var blockId = name.Substring(0, name.IndexOf(' '));
-                        return matchingSpellsSet.Contains(blockId);
-                    }
-                }
-                return false;
-            };
+            await ApplySpellIdFilterAsync($"Category = {id}");
         }
 
-        private void FilterFamilyCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private async void FilterFamilyCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (e.OriginalSource != FilterFamilyCombo)
             {
@@ -5479,40 +5473,16 @@ namespace SpellEditor
             var box = sender as FilteredComboBox;
             var selected = box.SelectedItem?.ToString() ?? "0 ";
             var id = int.Parse(selected.Substring(0, selected.IndexOf(' ')));
-            var view = CollectionViewSource.GetDefaultView(SelectSpell.Items);
             // Clear filter if id is 0
             if (id == 0)
             {
-                view.Filter = obj => true;
+                CollectionViewSource.GetDefaultView(SelectSpell.Items).Filter = obj => true;
                 return;
             }
-            // Collect all spell ID's with the family id
-            var matchingSpells = adapter.Query($"SELECT id FROM spell WHERE SpellFamilyName = {id}").Rows;
-            var matchingSpellsSet = new HashSet<string>();
-            foreach (DataRow record in matchingSpells)
-            {
-                matchingSpellsSet.Add(record[0].ToString());
-            }
-            // Apply filter
-            view.Filter = obj =>
-            {
-                var panel = obj as StackPanel;
-                using (var enumerator = panel.GetChildObjects().GetEnumerator())
-                {
-                    while (enumerator.MoveNext())
-                    {
-                        if (!(enumerator.Current is TextBlock block))
-                            continue;
-                        var name = block.Text.TrimStart();
-                        var blockId = name.Substring(0, name.IndexOf(' '));
-                        return matchingSpellsSet.Contains(blockId);
-                    }
-                }
-                return false;
-            };
+            await ApplySpellIdFilterAsync($"SpellFamilyName = {id}");
         }
 
-        private void FilterAuraCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private async void FilterAuraCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (e.OriginalSource != FilterAuraCombo)
             {
@@ -5521,117 +5491,45 @@ namespace SpellEditor
             var box = sender as ComboBox;
             var selected = box.SelectedItem?.ToString() ?? "0 ";
             var id = int.Parse(selected.Substring(0, selected.IndexOf(' ')));
-            var view = CollectionViewSource.GetDefaultView(SelectSpell.Items);
             // Clear filter if id is 0
             if (id == 0)
             {
-                view.Filter = obj => true;
+                CollectionViewSource.GetDefaultView(SelectSpell.Items).Filter = obj => true;
                 return;
             }
-            // Collect all spell ID's with the effect id
-            var matchingSpells = adapter.Query($"SELECT id FROM spell WHERE EffectApplyAuraName1 = {id} or EffectApplyAuraName2 = {id} or EffectApplyAuraName3 = {id}").Rows;
-            var matchingSpellsSet = new HashSet<string>();
-            foreach (DataRow record in matchingSpells)
-            {
-                matchingSpellsSet.Add(record[0].ToString());
-            }
-            // Apply filter
-            view.Filter = obj =>
-            {
-                var panel = obj as StackPanel;
-                using (var enumerator = panel.GetChildObjects().GetEnumerator())
-                {
-                    while (enumerator.MoveNext())
-                    {
-                        if (!(enumerator.Current is TextBlock block))
-                            continue;
-                        var name = block.Text.TrimStart();
-                        var blockId = name.Substring(0, name.IndexOf(' '));
-                        return matchingSpellsSet.Contains(blockId);
-                    }
-                }
-                return false;
-            };
+            await ApplySpellIdFilterAsync($"EffectApplyAuraName1 = {id} or EffectApplyAuraName2 = {id} or EffectApplyAuraName3 = {id}");
         }
 
-        private void FilterSpellTargetA_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private async void FilterSpellTargetA_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (e.OriginalSource != FilterSpellTargetA)
                 return;
             var box = sender as ComboBox;
             var selected = box.SelectedItem?.ToString() ?? "0 ";
             var id = int.Parse(selected.Substring(0, selected.IndexOf(' ')));
-            var view = CollectionViewSource.GetDefaultView(SelectSpell.Items);
             // Clear filter if id is 0
             if (id == 0)
             {
-                view.Filter = obj => true;
+                CollectionViewSource.GetDefaultView(SelectSpell.Items).Filter = obj => true;
                 return;
             }
-            // Collect all spell ID's with the effect id
-            var matchingSpells = adapter.Query($"SELECT id FROM spell WHERE EffectImplicitTargetA1 = {id} or EffectImplicitTargetA2 = {id} or EffectImplicitTargetA3 = {id}").Rows;
-            var matchingSpellsSet = new HashSet<string>();
-            foreach (DataRow record in matchingSpells)
-            {
-                matchingSpellsSet.Add(record[0].ToString());
-            }
-            // Apply filter
-            view.Filter = obj =>
-            {
-                var panel = obj as StackPanel;
-                using (var enumerator = panel.GetChildObjects().GetEnumerator())
-                {
-                    while (enumerator.MoveNext())
-                    {
-                        if (!(enumerator.Current is TextBlock block))
-                            continue;
-                        var name = block.Text.TrimStart();
-                        var blockId = name.Substring(0, name.IndexOf(' '));
-                        return matchingSpellsSet.Contains(blockId);
-                    }
-                }
-                return false;
-            };
+            await ApplySpellIdFilterAsync($"EffectImplicitTargetA1 = {id} or EffectImplicitTargetA2 = {id} or EffectImplicitTargetA3 = {id}");
         }
 
-        private void FilterSpellTargetB_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private async void FilterSpellTargetB_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (e.OriginalSource != FilterSpellTargetB)
                 return;
             var box = sender as ComboBox;
             var selected = box.SelectedItem?.ToString() ?? "0 ";
             var id = int.Parse(selected.Substring(0, selected.IndexOf(' ')));
-            var view = CollectionViewSource.GetDefaultView(SelectSpell.Items);
             // Clear filter if id is 0
             if (id == 0)
             {
-                view.Filter = obj => true;
+                CollectionViewSource.GetDefaultView(SelectSpell.Items).Filter = obj => true;
                 return;
             }
-            // Collect all spell ID's with the effect id
-            var matchingSpells = adapter.Query($"SELECT id FROM spell WHERE EffectImplicitTargetB1 = {id} or EffectImplicitTargetB2 = {id} or EffectImplicitTargetB3 = {id}").Rows;
-            var matchingSpellsSet = new HashSet<string>();
-            foreach (DataRow record in matchingSpells)
-            {
-                matchingSpellsSet.Add(record[0].ToString());
-            }
-            // Apply filter
-            view.Filter = obj =>
-            {
-                var panel = obj as StackPanel;
-                using (var enumerator = panel.GetChildObjects().GetEnumerator())
-                {
-                    while (enumerator.MoveNext())
-                    {
-                        if (!(enumerator.Current is TextBlock block))
-                            continue;
-                        var name = block.Text.TrimStart();
-                        var blockId = name.Substring(0, name.IndexOf(' '));
-                        return matchingSpellsSet.Contains(blockId);
-                    }
-                }
-                return false;
-            };
+            await ApplySpellIdFilterAsync($"EffectImplicitTargetB1 = {id} or EffectImplicitTargetB2 = {id} or EffectImplicitTargetB3 = {id}");
         }
 
         private void VisualMissileFilter_TextChanged(object sender, TextChangedEventArgs e)

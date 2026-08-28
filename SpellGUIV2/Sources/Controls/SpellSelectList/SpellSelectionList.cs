@@ -12,6 +12,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Threading;
 
 namespace SpellEditor.Sources.Controls
 {
@@ -28,6 +29,12 @@ namespace SpellEditor.Sources.Controls
         public DataTable Table { get { return _Table; } }
         private bool _initialised = false;
         private bool _EnableEdits = true;
+
+        // Rows waiting to be turned into list entries. Built in small chunks at background
+        // dispatcher priority so a large spell table never locks the UI up.
+        private const int UiChunkSize = 250;
+        private readonly List<DataRow> _PendingRows = new List<DataRow>();
+        private bool _PumpScheduled;
 
         public void Initialise()
         {
@@ -92,6 +99,7 @@ namespace SpellEditor.Sources.Controls
                 selectSpellWatch.Start();
                 _ContentsIndex = 0;
                 _ContentsCount = Items.Count;
+                _PendingRows.Clear();
                 var worker = new SpellListQueryWorker(adapter, selectSpellWatch) { WorkerReportsProgress = true };
                 worker.ProgressChanged += _worker_ProgressChanged;
 
@@ -109,9 +117,8 @@ namespace SpellEditor.Sources.Controls
                         _Table.Rows.Clear();
 
                     const uint pageSize = 5000;
-                    uint lowerBounds = 0;
-                    DataRowCollection results = GetSpellNames(lowerBounds, pageSize / 5, locale);
-                    lowerBounds += pageSize / 5;
+                    uint lastId = 0;
+                    DataRowCollection results = GetSpellNames(lastId, pageSize / 5, locale);
                     // Edge case of empty table after truncating, need to send a event to the handler
                     if (results != null && results.Count == 0)
                     {
@@ -119,9 +126,9 @@ namespace SpellEditor.Sources.Controls
                     }
                     while (results != null && results.Count != 0)
                     {
+                        lastId = uint.Parse(results[results.Count - 1][0].ToString());
                         worker.ReportProgress(0, results);
-                        results = GetSpellNames(lowerBounds, pageSize, locale);
-                        lowerBounds += pageSize;
+                        results = GetSpellNames(lastId, pageSize, locale);
                     }
                 };
                 worker.RunWorkerCompleted += (sender, args) =>
@@ -182,10 +189,52 @@ namespace SpellEditor.Sources.Controls
             {
                 _Table.Merge(result, false, MissingSchemaAction.Add);
                 _Table.AcceptChanges();
+                if (result.Rows.Count > 0)
+                    InsertSpellEntry(result.Rows[0]);
             }
-            // Refresh UI
-            RefreshSpellList();
         }
+
+        // Splices one entry into the existing item source, rebuilding every entry for a single
+        // add is what made creating a spell take seconds on a large table
+        private void InsertSpellEntry(DataRow row)
+        {
+            var entry = new SpellSelectionEntry();
+            entry.RefreshEntry(row, _Language);
+            if (_EnableEdits)
+            {
+                entry.SetCopyClickAction(DuplicateAction);
+                entry.SetDeleteClickAction(DeleteAction);
+                entry.SetPasteClickAction(PasteAction);
+            }
+
+            var spellId = entry.GetSpellId();
+            var newSrc = CurrentItemSource();
+            var index = newSrc.FindIndex(item => item is SpellSelectionEntry existing && existing.GetSpellId() > spellId);
+            if (index < 0)
+                newSrc.Add(entry);
+            else
+                newSrc.Insert(index, entry);
+
+            ItemsSource = newSrc;
+            _ContentsIndex = newSrc.Count;
+            _ContentsCount = newSrc.Count;
+        }
+
+        private void RemoveSpellEntry(uint spellId)
+        {
+            var newSrc = CurrentItemSource();
+            var index = newSrc.FindIndex(item => item is SpellSelectionEntry existing && existing.GetSpellId() == spellId);
+            if (index < 0)
+                return;
+            newSrc.RemoveAt(index);
+
+            ItemsSource = newSrc;
+            _ContentsIndex = newSrc.Count;
+            _ContentsCount = newSrc.Count;
+        }
+
+        private List<object> CurrentItemSource() =>
+            ItemsSource == null ? new List<object>() : new List<object>(ItemsSource.Cast<object>());
 
         public void UpdateSpell(DataRow row)
         {
@@ -222,7 +271,7 @@ namespace SpellEditor.Sources.Controls
             _Table.Select($"id = {spellId}").First().Delete();
             _Table.AcceptChanges();
             // Refresh UI
-            RefreshSpellList();
+            RemoveSpellEntry(spellId);
         }
 
         private void RefreshSpellList()
@@ -230,6 +279,7 @@ namespace SpellEditor.Sources.Controls
             // Update UI
             _ContentsIndex = 0;
             _ContentsCount = Items.Count;
+            _PendingRows.Clear();
             _Table.DefaultView.Sort = "id";
             // We have to call ToTable to return a new sorted data table
             // Returning the existing table will have new rows at the end of the collection
@@ -239,33 +289,41 @@ namespace SpellEditor.Sources.Controls
 
         private void _worker_ProgressChanged(object sender, ProgressChangedEventArgs e)
         {
-            var watch = new Stopwatch();
-            watch.Start();
-            DataRowCollection collection = (DataRowCollection)e.UserState;
-            int rowIndex = 0;
-            // Reuse existing UI elements if they exist
-            if (_ContentsIndex < _ContentsCount)
-            {
-                foreach (DataRow row in collection)
-                {
-                    if (_ContentsIndex == _ContentsCount || _ContentsIndex >= Items.Count)
-                        break;
+            var collection = (DataRowCollection)e.UserState;
+            foreach (DataRow row in collection)
+                _PendingRows.Add(row);
 
-                    if (!(Items[_ContentsIndex] is SpellSelectionEntry entry))
-                        continue;
+            if (collection.Count == 0)
+                PumpPendingRows();
+            else
+                SchedulePump();
+        }
 
-                    ++rowIndex;
+        private void SchedulePump()
+        {
+            if (_PumpScheduled)
+                return;
+            _PumpScheduled = true;
+            Dispatcher.BeginInvoke(DispatcherPriority.Background, new System.Action(PumpPendingRows));
+        }
 
-                    entry.RefreshEntry(row, _Language);
+        private void PumpPendingRows()
+        {
+            _PumpScheduled = false;
 
-                    ++_ContentsIndex;
-                }
-            }
-            // Spawn any new UI elements required
+            var take = _PendingRows.Count < UiChunkSize ? _PendingRows.Count : UiChunkSize;
             var newElements = new List<UIElement>();
-            for (; rowIndex < collection.Count; ++rowIndex)
+            for (int i = 0; i < take; ++i)
             {
-                var row = collection[rowIndex];
+                var row = _PendingRows[i];
+                // Reuse an existing UI element where we have one spare
+                if (_ContentsIndex < _ContentsCount && _ContentsIndex < Items.Count &&
+                    Items[_ContentsIndex] is SpellSelectionEntry existing)
+                {
+                    existing.RefreshEntry(row, _Language);
+                    ++_ContentsIndex;
+                    continue;
+                }
                 var entry = new SpellSelectionEntry();
                 entry.RefreshEntry(row, _Language);
                 if (_EnableEdits)
@@ -277,6 +335,8 @@ namespace SpellEditor.Sources.Controls
                 newElements.Add(entry);
                 ++_ContentsIndex;
             }
+            _PendingRows.RemoveRange(0, take);
+
             // Replace the item source directly, adding each item would raise a high amount of events
             var src = ItemsSource;
             var newSrc = new List<object>();
@@ -294,15 +354,17 @@ namespace SpellEditor.Sources.Controls
 
             newSrc.AddRange(newElements);
             ItemsSource = newSrc;
-            watch.Stop();
-            Logger.Info($"Worker progress change event took {watch.ElapsedMilliseconds}ms to handle");
+
+            if (_PendingRows.Count > 0)
+                SchedulePump();
         }
 
-        private DataRowCollection GetSpellNames(uint lowerBound, uint pageSize, int locale)
+        // Keyset paged rather than OFFSET paged, MySQL rescans every skipped row on an OFFSET
+        private DataRowCollection GetSpellNames(uint lastId, uint pageSize, int locale)
         {
             using (var newSpellNames = _Adapter.Query(
-                string.Format(@"SELECT `id`,`SpellName{1}`,`SpellIconID`,`SpellRank{1}` FROM `{0}` ORDER BY `id` LIMIT {2}, {3}",
-                 "spell", locale, lowerBound, pageSize)))
+                string.Format(@"SELECT `id`,`SpellName{1}`,`SpellIconID`,`SpellRank{1}` FROM `{0}` WHERE `id` > {2} ORDER BY `id` LIMIT {3}",
+                 "spell", locale, lastId, pageSize)))
             {
                 _Table.Merge(newSpellNames, false, MissingSchemaAction.Add);
                 _Table.AcceptChanges();
