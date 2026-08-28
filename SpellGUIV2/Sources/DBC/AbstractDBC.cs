@@ -226,17 +226,15 @@ namespace SpellEditor.Sources.DBC
                             }
                             else if (entry.Type == BindingType.STRING_OFFSET)
                             {
-                                writer.Write(data.Length == 0 ? 0 : body.OffsetStorage[data.GetHashCode()]);
+                                writer.Write(data.Length == 0 ? 0 : body.OffsetStorage[data]);
                             }
                             else
                                 throw new Exception($"Unknown type: {entry.Type} on entry {entry.Name} binding {binding.Name}");
                         }
                     }
-                    // Write string block
-                    int[] offsetsStored = body.OffsetStorage.Values.ToArray();
                     writer.Write(Encoding.UTF8.GetBytes("\0"));
-                    for (int i = 0; i < offsetsStored.Length; ++i)
-                        writer.Write(Encoding.UTF8.GetBytes(body.ReverseStorage[offsetsStored[i]] + "\0"));
+                    foreach (var offset in body.ReverseStorage.Keys.OrderBy(o => o))
+                        writer.Write(Encoding.UTF8.GetBytes(body.ReverseStorage[offset] + "\0"));
                 }
             }
         }
