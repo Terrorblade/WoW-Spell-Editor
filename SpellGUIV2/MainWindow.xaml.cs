@@ -26,6 +26,7 @@ using NLog.Layouts;
 using NLog.Targets;
 using SpellEditor.Sources.AI;
 using SpellEditor.Sources.Binding;
+using SpellEditor.Sources.BLP;
 using SpellEditor.Sources.Config;
 using SpellEditor.Sources.Constants;
 using SpellEditor.Sources.Controls;
@@ -75,8 +76,6 @@ namespace SpellEditor
         public uint selectedID;
         public uint newIconID = 1;
         private bool updating;
-        private DispatcherTimer _sliderDebounce;
-        private double _pendingSliderValue;
         private readonly SpellStringParser SpellStringParser = new SpellStringParser();
 
         private readonly List<ThreadSafeTextBox> spellDescGenFields = new List<ThreadSafeTextBox>();
@@ -1410,12 +1409,7 @@ namespace SpellEditor
             }
             else if (sender == FilterIcons)
             {
-                var input = FilterIcons.Text.ToLower();
-                foreach (System.Windows.Controls.Image image in IconGrid.Children)
-                {
-                    var name = image.ToolTip.ToString().ToLower();
-                    image.Visibility = name.Contains(input) ? Visibility.Visible : Visibility.Collapsed;
-                }
+                ((SpellIconDBC)DBCManager.GetInstance().FindDbcForBinding("SpellIcon"))?.SetIconFilter(FilterIcons.Text);
             }
             else if (sender == Attributes1Search || sender == Attributes2Search)
             {
@@ -2106,8 +2100,7 @@ namespace SpellEditor
         private void prepareIconEditor()
         {
             var loadIcons = (SpellIconDBC)DBCManager.GetInstance().FindDbcForBinding("SpellIcon");
-            loadIcons.LoadImages(64);
-            loadIcons.updateIconSize(64, new Thickness(16, 0, 0, 0));
+            loadIcons?.LoadImages();
         }
 
         #endregion
@@ -5325,31 +5318,15 @@ namespace SpellEditor
             if (IconGrid == null || !IconGrid.IsInitialized)
                 return;
 
-            double newSize = e.NewValue / 4;
-            var margin = new Thickness(newSize, 0, 0, 0);
-            ((SpellIconDBC)DBCManager.GetInstance().FindDbcForBinding("SpellIcon"))?.updateIconSize(newSize, margin);
-
-            _pendingSliderValue = e.NewValue;
-            if (_sliderDebounce == null)
-            {
-                _sliderDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
-                _sliderDebounce.Tick += SliderDebounce_Tick;
-            }
-            _sliderDebounce.Stop();
-            _sliderDebounce.Start();
+            ((SpellIconDBC)DBCManager.GetInstance().FindDbcForBinding("SpellIcon"))?.SetIconSize(e.NewValue);
         }
 
-        private void SliderDebounce_Tick(object sender, EventArgs e)
+        private void IconGrid_MouseDown(object sender, MouseButtonEventArgs e)
         {
-            _sliderDebounce.Stop();
-            double newValue = _pendingSliderValue;
-            var margin = new Thickness(newValue / 4, 0, 0, 0);
-            foreach (System.Windows.Controls.Image image in IconGrid.Children)
-            {
-                image.Margin = margin;
-                image.Width = newValue;
-                image.Height = newValue;
-            }
+            if (!((e.OriginalSource as FrameworkElement)?.DataContext is IconEntry entry))
+                return;
+            NewIcon.Source = entry.Source;
+            newIconID = entry.Id;
         }
 
         public DataRow GetSpellRowById(uint spellId) => SpellDBC.GetRecordById(spellId, this);

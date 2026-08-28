@@ -129,9 +129,29 @@ namespace SereniaBLPLib
             get
             {
                 int i = 0;
-                while (this.mipmapOffsets[i] != 0) i++;
+                while (i < this.mipmapOffsets.Length && this.mipmapOffsets[i] != 0) i++;
                 return i;
             }
+        }
+
+        public int Width
+        {
+            get { return this.width; }
+        }
+
+        public int Height
+        {
+            get { return this.height; }
+        }
+
+        public int GetMipMapWidth(int MipmapLevel)
+        {
+            return Math.Max(1, this.width >> MipmapLevel);
+        }
+
+        public int GetMipMapHeight(int MipmapLevel)
+        {
+            return Math.Max(1, this.height >> MipmapLevel);
         }
         #endregion
 

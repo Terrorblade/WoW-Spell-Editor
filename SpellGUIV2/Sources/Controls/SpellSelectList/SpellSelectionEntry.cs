@@ -109,8 +109,20 @@ namespace SpellEditor.Sources.Controls.SpellSelectList
             {
                 _Dirty = false;
                 var iconId = uint.Parse(image.ToolTip.ToString());
-                var filePath = loadIcons.GetIconPath(iconId) + ".blp";
-                image.Source = BlpManager.GetInstance().GetImageSourceFromBlpPath(filePath);
+                var iconPath = loadIcons.GetIconPath(iconId);
+                if (iconPath.Length == 0)
+                {
+                    image.Source = null;
+                }
+                else
+                {
+                    var expectedToolTip = iconId.ToString();
+                    BlpManager.GetInstance().RequestImageSource(iconPath + ".blp", source =>
+                    {
+                        if (image.ToolTip != null && image.ToolTip.ToString() == expectedToolTip)
+                            image.Source = source;
+                    });
+                }
             }
             // Load context menu
             if (ContextMenu == null)

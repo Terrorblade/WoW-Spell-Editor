@@ -129,8 +129,6 @@ namespace SpellEditor
 
             currentRow = BuildMiscValueFieldsConfig(ConfigGrid, currentRow);
 
-            currentRow = BuildIconConfig(ConfigGrid, currentRow);
-
             currentRow = BuildMpqConfig(ConfigGrid, currentRow);
 
             currentRow = BuildBindingsAndDbcUI(ConfigGrid, currentRow);
@@ -348,30 +346,6 @@ namespace SpellEditor
             return currentRow;
         }
 
-        private int BuildIconConfig(Grid grid, int currentRow)
-        {
-            var label = new Label { Content = "Render only spell icons in view:" };
-            label.Margin = new Thickness(10);
-
-            var checkbox = new System.Windows.Controls.CheckBox { };
-            checkbox.Margin = new Thickness(10);
-
-            checkbox.IsChecked = Config.RenderImagesInView;
-            checkbox.Checked += RenderIconsInView_Checked;
-            checkbox.Unchecked += RenderIconsInView_Checked;
-            checkbox.ToolTip = "When this is turned on, the Icon tab will only load the images currently visible on the screen. It makes it slower to scroll but it can handle more images without crashing.";
-
-            Grid.SetRow(label, currentRow);
-            Grid.SetRow(checkbox, currentRow++);
-            Grid.SetColumn(label, 0);
-            Grid.SetColumn(checkbox, 1);
-
-            grid.Children.Add(label);
-            grid.Children.Add(checkbox);
-
-            return currentRow;
-        }
-
         private int BuildMpqConfig(Grid grid, int currentRow)
         {
             var label = new Label
@@ -396,11 +370,6 @@ namespace SpellEditor
             grid.Children.Add(textBox);
 
             return currentRow;
-        }
-
-        private void RenderIconsInView_Checked(object sender, RoutedEventArgs e)
-        {
-            Config.RenderImagesInView = (sender as System.Windows.Controls.CheckBox).IsChecked.Value;
         }
 
         private void DynamicMiscValueFields_Checked(object sender, RoutedEventArgs e)
