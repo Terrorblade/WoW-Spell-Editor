@@ -29,7 +29,7 @@ namespace SpellEditor.Sources.DBC
         private Struct ReadStruct<Struct>(byte[] readBuffer)
         {
             Struct structure;
-            GCHandle handle;
+            GCHandle handle = default;
             try
             {
                 handle = GCHandle.Alloc(readBuffer, GCHandleType.Pinned);
@@ -40,8 +40,11 @@ namespace SpellEditor.Sources.DBC
                 Logger.Info(e);
                 throw new Exception(e.Message);
             }
-            if (handle != null)
-                handle.Free();
+            finally
+            {
+                if (handle.IsAllocated)
+                    handle.Free();
+            }
             return structure;
         }
 
