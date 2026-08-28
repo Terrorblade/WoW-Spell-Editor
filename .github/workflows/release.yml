@@ -40,8 +40,7 @@ jobs:
           if ($tag -notmatch '^[A-Za-z0-9._\-\+/]+$') {
             throw "Tag '$tag' contains characters that are not valid in a git ref."
           }
-          git rev-parse -q --verify "refs/tags/$tag" > $null 2>&1
-          if ($LASTEXITCODE -eq 0) {
+          if (git tag --list $tag) {
             throw "Tag '$tag' already exists. Pick a different tag or delete the existing one."
           }
           Write-Host "Tag '$tag' is available."
@@ -150,7 +149,10 @@ jobs:
           $installer = "${{ env.BASE_NAME }}-Setup.exe"
           & 'C:\Program Files\7-Zip\7z.exe' t $installer
           if ($LASTEXITCODE -ne 0) { throw "Installer failed its 7-Zip integrity check." }
-          & 'C:\Program Files\7-Zip\7z.exe' l $installer | Select-String -Pattern 'SpellEditor.exe|Interface\\Icons' | Select-Object -First 5
+
+          $listing = & 'C:\Program Files\7-Zip\7z.exe' l $installer
+          if ($LASTEXITCODE -ne 0) { throw "Could not list the installer contents." }
+          $listing | Select-String -Pattern 'SpellEditor\.exe|Interface\\Icons' | Select-Object -First 5
 
       - name: Generate checksums
         shell: pwsh
