@@ -89,7 +89,7 @@ namespace SpellEditor.Sources.DBC
                 catch (Exception exception)
                 {
                     Logger.Error(exception, $"Failed to load: [{name}.dbc], the program will likely break because of this error.");
-                    throw exception;
+                    throw;
                 }
             });
         }

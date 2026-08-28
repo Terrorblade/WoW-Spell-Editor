@@ -8,7 +8,6 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.Serialization.Formatters.Binary;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -113,8 +112,6 @@ namespace SpellEditor
         public uint[] familyFlagsC = new uint[3];
 
         private uint[] effectTriggerSpells = new uint[3];
-
-        bool _use_picker_dialogs = true;
 
         #endregion
 
@@ -2104,19 +2101,6 @@ namespace SpellEditor
         {
             Flyout.IsOpen = true;
             FlyoutText.Text = message;
-        }
-
-        public static T DeepCopy<T>(T obj)
-        {
-            BinaryFormatter s = new BinaryFormatter();
-            using (MemoryStream ms = new MemoryStream())
-            {
-                s.Serialize(ms, obj);
-                ms.Position = 0;
-                T t = (T)s.Deserialize(ms);
-
-                return t;
-            }
         }
 
         private void prepareIconEditor()
