@@ -49,6 +49,17 @@ namespace SpellEditor.Sources.DBC
                 return RecordCache.TryGetValue(id, out var cached) ? cached : null;
         }
 
+        // The cached row on its own table, the spell load path works on a table of one row
+        public static DataTable GetCachedTable(uint id)
+        {
+            var row = GetCachedRecord(id);
+            if (row == null || row.Table == null)
+                return null;
+            var table = row.Table.Clone();
+            table.ImportRow(row);
+            return table;
+        }
+
         public static DataRow GetRecordById(uint id, MainWindow mainWindows)
         {
             lock (RecordCache)

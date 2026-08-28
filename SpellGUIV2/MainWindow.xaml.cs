@@ -912,10 +912,13 @@ namespace SpellEditor
                 manager.InjectLoadedDbc("AreaGroup", new AreaGroup(((AreaTable)manager.FindDbcForBinding("AreaTable")).Lookups));
             }
 
-            Task.Run(() =>
+            // Cheap to build, it only indexes a spell family once that family is asked about
+            spellFamilyClassMaskParser = new SpellFamilyClassMaskParser(GetDBAdapter());
+            if (Config.CacheAllOnLoad)
             {
-                spellFamilyClassMaskParser = new SpellFamilyClassMaskParser(GetDBAdapter());
-            });
+                setMessage?.Invoke("Caching spell family class masks...");
+                Task.Run(() => spellFamilyClassMaskParser.CacheAllFamilies());
+            }
         }
 
         private async void LoadAllData()
@@ -2035,6 +2038,9 @@ namespace SpellEditor
                     row.EndEdit();
                     adapter.CommitChanges(query, q.GetChanges());
                     SpellDBC.InvalidateRecord(selectedID);
+                    // The spell may have changed family or flags, so drop the whole index,
+                    // families are cheap to rebuild one at a time
+                    spellFamilyClassMaskParser?.InvalidateAll();
 
                     ShowFlyoutMessage($"Saved spell {selectedID}.");
 
@@ -2140,10 +2146,19 @@ namespace SpellEditor
 
         private static readonly Regex SpellReferenceRegex = new Regex(@"\$(\d+)", RegexOptions.Compiled);
 
-        // Runs off the UI thread. Fetches the selected spell live and pulls every spell its
+        // Runs off the UI thread. Fetches the selected spell and pulls every spell its
         // description or tooltip references in one extra query so loadSpell needs none.
+        // With refresh on selection turned off we reuse whatever is already cached instead.
         private DataTable PrefetchSpell(uint spellId)
         {
+            var refresh = Config.RefreshCacheOnSpellSelection;
+            if (!refresh)
+            {
+                var cachedTable = SpellDBC.GetCachedTable(spellId);
+                if (cachedTable != null)
+                    return cachedTable;
+            }
+
             var data = adapter.Query($"SELECT * FROM `spell` WHERE `ID` = '{spellId}'");
             SpellDBC.SeedRecordCache(data);
             if (data.Rows.Count != 1)
@@ -2160,7 +2175,7 @@ namespace SpellEditor
                     continue;
                 foreach (Match match in SpellReferenceRegex.Matches(text))
                 {
-                    if (uint.TryParse(match.Groups[1].Value, out var id) && id != spellId && !SpellDBC.IsCached(id))
+                    if (uint.TryParse(match.Groups[1].Value, out var id) && id != spellId && (refresh || !SpellDBC.IsCached(id)))
                         referenced.Add(id);
                 }
             }
@@ -3590,6 +3605,8 @@ namespace SpellEditor
                 }
 
                 uint familyName = uint.Parse(row["SpellFamilyName"].ToString());
+                if (Config.RefreshCacheOnSpellSelection)
+                    spellFamilyClassMaskParser?.InvalidateFamily(familyName);
                 AddFamilyIfNotExists(familyName);
                 SpellFamilyName.SetTextFromIndex(familyName);
                 if (!isWotlkOrGreater)

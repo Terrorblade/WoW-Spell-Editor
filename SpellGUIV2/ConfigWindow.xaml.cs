@@ -61,6 +61,9 @@ namespace SpellEditor
             ConfigGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             // misc value fields config row
             ConfigGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            // caching config rows
+            ConfigGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            ConfigGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             // Icon config row
             ConfigGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             // MPQ name config row
@@ -128,6 +131,8 @@ namespace SpellEditor
             ConfigGrid.Children.Add(versionButton);
 
             currentRow = BuildMiscValueFieldsConfig(ConfigGrid, currentRow);
+
+            currentRow = BuildCachingConfig(ConfigGrid, currentRow);
 
             currentRow = BuildMpqConfig(ConfigGrid, currentRow);
 
@@ -375,6 +380,66 @@ namespace SpellEditor
         private void DynamicMiscValueFields_Checked(object sender, RoutedEventArgs e)
         {
             Config.DynamicMiscValueFields = (sender as System.Windows.Controls.CheckBox).IsChecked.Value;
+        }
+
+        private int BuildCachingConfig(Grid grid, int currentRow)
+        {
+            var cacheAllLabel = new Label
+            {
+                Content = "Cache Everything On Load:",
+                Margin = new Thickness(10)
+            };
+            var cacheAllCheckbox = new System.Windows.Controls.CheckBox
+            {
+                Margin = new Thickness(10),
+                IsChecked = Config.CacheAllOnLoad,
+                ToolTip = "Off by default. When off, optional DBCs and spell family class masks are only read when something asks for them, " +
+                    "which makes startup much faster. Turn this on to read it all up front instead."
+            };
+            cacheAllCheckbox.Checked += CacheAllOnLoad_Checked;
+            cacheAllCheckbox.Unchecked += CacheAllOnLoad_Checked;
+
+            var refreshLabel = new Label
+            {
+                Content = "Refresh Cache On Spell Selection:",
+                Margin = new Thickness(10)
+            };
+            var refreshCheckbox = new System.Windows.Controls.CheckBox
+            {
+                Margin = new Thickness(10),
+                IsChecked = Config.RefreshCacheOnSpellSelection,
+                ToolTip = "On by default. Selecting a spell refetches it and the spells it references from the database, so edits made elsewhere show up. " +
+                    "Turn this off to reuse cached spell data until it is saved or reloaded."
+            };
+            refreshCheckbox.Checked += RefreshCacheOnSpellSelection_Checked;
+            refreshCheckbox.Unchecked += RefreshCacheOnSpellSelection_Checked;
+
+            Grid.SetRow(cacheAllLabel, currentRow);
+            Grid.SetRow(cacheAllCheckbox, currentRow++);
+            Grid.SetColumn(cacheAllLabel, 0);
+            Grid.SetColumn(cacheAllCheckbox, 1);
+
+            Grid.SetRow(refreshLabel, currentRow);
+            Grid.SetRow(refreshCheckbox, currentRow++);
+            Grid.SetColumn(refreshLabel, 0);
+            Grid.SetColumn(refreshCheckbox, 1);
+
+            grid.Children.Add(cacheAllLabel);
+            grid.Children.Add(cacheAllCheckbox);
+            grid.Children.Add(refreshLabel);
+            grid.Children.Add(refreshCheckbox);
+
+            return currentRow;
+        }
+
+        private void CacheAllOnLoad_Checked(object sender, RoutedEventArgs e)
+        {
+            Config.CacheAllOnLoad = (sender as System.Windows.Controls.CheckBox).IsChecked.Value;
+        }
+
+        private void RefreshCacheOnSpellSelection_Checked(object sender, RoutedEventArgs e)
+        {
+            Config.RefreshCacheOnSpellSelection = (sender as System.Windows.Controls.CheckBox).IsChecked.Value;
         }
 
         private int BuildBindingsAndDbcUI(Grid grid, int currentRow)

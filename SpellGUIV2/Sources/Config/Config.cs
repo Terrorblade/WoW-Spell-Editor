@@ -125,6 +125,34 @@ namespace SpellEditor.Sources.Config
             }
         }
 
+        // Off by default. When on, everything that used to be read up front is read up front
+        // again: the optional DBCs and the full spell family class mask index.
+        public static bool CacheAllOnLoad
+        {
+            get { return "true".Equals(GetConfigValue("CacheAllOnLoad")); }
+            set
+            {
+                UpdateConfigValue("CacheAllOnLoad", value ? "true" : "false");
+                Save();
+            }
+        }
+
+        // On by default. Selecting a spell refetches its row and drops the cached data that
+        // belongs to it, so the editor always shows what is currently in the database.
+        public static bool RefreshCacheOnSpellSelection
+        {
+            get
+            {
+                var str = GetConfigValue("RefreshCacheOnSpellSelection");
+                return "true".Equals(str) || str == string.Empty;
+            }
+            set
+            {
+                UpdateConfigValue("RefreshCacheOnSpellSelection", value ? "true" : "false");
+                Save();
+            }
+        }
+
         public static string DefaultMpqName
         {
             get { return GetConfigValue("DefaultMpqName"); }
