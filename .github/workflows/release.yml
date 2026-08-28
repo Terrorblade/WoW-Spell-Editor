@@ -29,7 +29,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -55,7 +55,7 @@ jobs:
           Write-Host "Found Icons/Interface.zip ($mb MB)."
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
 
@@ -65,14 +65,12 @@ jobs:
       - name: Build
         run: dotnet build SpellGUIV2.sln -c Release --no-restore
 
-      - name: Publish self-contained
+      - name: Publish single-file self-contained
         run: >
           dotnet publish SpellGUIV2/SpellEditor.csproj
           -c Release
           -r ${{ env.RUNTIME_ID }}
           --self-contained true
-          -p:PublishTrimmed=false
-          -p:PublishSingleFile=false
           -o staging
 
       - name: Extract spell icons into package
@@ -89,10 +87,6 @@ jobs:
         run: |
           $required = @(
             'staging\SpellEditor.exe',
-            'staging\SpellEditor.dll',
-            'staging\StormLibSharp.dll',
-            'staging\SereniaBLPLib.dll',
-            'staging\runtimes\${{ env.RUNTIME_ID }}\native\StormLib.dll',
             'staging\Bindings_335_wotlk',
             'staging\Languages',
             'staging\Interface\Icons'
@@ -100,12 +94,23 @@ jobs:
           $missing = $required | Where-Object { -not (Test-Path $_) }
           if ($missing) { throw "Missing from package:`n" + ($missing -join "`n") }
 
-          if (-not (Get-ChildItem 'staging' -Recurse -Filter 'SQLite.Interop.dll')) {
-            throw "SQLite.Interop.dll is not present anywhere in the package."
+          $strays = Get-ChildItem 'staging' -Recurse -File -Include *.dll, *.pdb, *.deps.json, *.runtimeconfig.json
+          if ($strays) {
+            throw "Package is not self-contained, these should be inside SpellEditor.exe:`n" + ($strays.FullName -join "`n")
           }
+
+          $bytes = [System.IO.File]::ReadAllBytes('staging\SpellEditor.exe')
+          $text = [System.Text.Encoding]::UTF8.GetString($bytes)
+          foreach ($native in @('StormLib.dll', 'SQLite.Interop.dll')) {
+            if ($text -notmatch [regex]::Escape($native)) {
+              throw "$native was not bundled into SpellEditor.exe."
+            }
+          }
+
+          $exeMb = [math]::Round((Get-Item 'staging\SpellEditor.exe').Length / 1MB, 1)
           $size = [math]::Round((Get-ChildItem 'staging' -Recurse -File | Measure-Object Length -Sum).Sum / 1MB, 1)
           $count = (Get-ChildItem 'staging' -Recurse -File | Measure-Object).Count
-          Write-Host "Package: $count files, $size MB"
+          Write-Host "SpellEditor.exe: $exeMb MB. Package: $count files, $size MB"
 
       - name: Build archives
         shell: pwsh
@@ -204,7 +209,7 @@ jobs:
 
       - name: Upload build artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: spell-editor-${{ inputs.tag }}
           path: |

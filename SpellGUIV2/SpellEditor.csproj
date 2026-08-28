@@ -15,8 +15,15 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
-    <AllowedReferenceRelatedFileExtensions>.pdb</AllowedReferenceRelatedFileExtensions>
+    <AllowedReferenceRelatedFileExtensions>none</AllowedReferenceRelatedFileExtensions>
     <NoWarn>$(NoWarn);CA1416;SYSLIB0014</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
   </PropertyGroup>
 
   <ItemGroup>
@@ -48,5 +55,15 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
+
+  <Target Name="BundleStormLibAsNative" AfterTargets="ComputeResolvedFilesToPublishList" Condition="'$(PublishSingleFile)' == 'true'">
+    <ItemGroup>
+      <_StormLibAll Include="@(ResolvedFileToPublish)" Condition="'%(Filename)%(Extension)' == 'StormLib.dll'" />
+      <_StormLibForRid Include="@(_StormLibAll)" Condition="'%(RelativePath)' == 'runtimes\$(RuntimeIdentifier)\native\StormLib.dll'" />
+      <ResolvedFileToPublish Remove="@(_StormLibAll)" />
+      <ResolvedFileToPublish Include="@(_StormLibForRid)" AssetType="native" RelativePath="StormLib.dll" />
+    </ItemGroup>
+    <Error Condition="'@(_StormLibForRid)' == ''" Text="No StormLib.dll found for runtime identifier '$(RuntimeIdentifier)'." />
+  </Target>
 
 </Project>
