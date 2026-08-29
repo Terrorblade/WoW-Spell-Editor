@@ -771,7 +771,7 @@ namespace SpellEditor
                 _ImportExportWindow.Show();
                 return;
             }
-            var window = new ImportExportWindow(adapter, PopulateSelectSpell, LoadAllRequiredDbcs);
+            var window = new ImportExportWindow(adapter, () => PopulateSelectSpell(), LoadAllRequiredDbcs);
             window.Show();
             window.Height += 40;
             window.Width /= 2;
@@ -1239,8 +1239,9 @@ namespace SpellEditor
                 controller.SetMessage("Waiting for table creation to finish...");
                 await createTask;
             }*/
+            controller.SetMessage("Loading spell list...");
+            await PopulateSelectSpell();
             await controller.CloseAsync();
-            PopulateSelectSpell();
             await CheckAndOfferAutoImport();
         }
 
@@ -1266,7 +1267,7 @@ namespace SpellEditor
                 if (res != MessageDialogResult.Affirmative)
                     return;
 
-                var window = new ImportExportWindow(adapter, PopulateSelectSpell, LoadAllRequiredDbcs);
+                var window = new ImportExportWindow(adapter, () => PopulateSelectSpell(), LoadAllRequiredDbcs);
                 window.Show();
                 window.Height += 40;
                 window.Width /= 2;
@@ -2211,7 +2212,7 @@ namespace SpellEditor
 
         #region PopulateSelectSpell
 
-        private void PopulateSelectSpell()
+        private Task PopulateSelectSpell()
         {
             if (!SelectSpell.IsInitialised())
             {
@@ -2223,8 +2224,9 @@ namespace SpellEditor
             {
                 SelectSpell.SetAdapter(GetDBAdapter());
             }
-            SelectSpell.PopulateSelectSpell();
+            var loadTask = SelectSpell.PopulateSelectSpell();
             FocusLanguage();
+            return loadTask;
         }
         #endregion
 

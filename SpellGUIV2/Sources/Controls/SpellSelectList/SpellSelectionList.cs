@@ -9,6 +9,7 @@ using System.Data;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -21,7 +22,6 @@ namespace SpellEditor.Sources.Controls
 
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
-        private int _ContentsCount;
         private int _ContentsIndex;
         private int _Language;
         private IDatabaseAdapter _Adapter;
@@ -39,15 +39,26 @@ namespace SpellEditor.Sources.Controls
         private readonly List<DataRow> _PendingRows = new List<DataRow>();
         private bool _PumpScheduled;
 
+        private volatile int _LoadGeneration;
+        private bool _LoadFinished;
+
+        // Completes once every row is queried and materialised into the list, so a caller
+        // can hold a loading indicator up for the whole cold start
+        private TaskCompletionSource<bool> _LoadCompletion;
+
         public void Initialise()
         {
             if (_initialised)
                 return;
-            _Table.Columns.Add("id", typeof(uint));
-            _Table.Columns.Add("SpellName" + _Language, typeof(string));
-            _Table.Columns.Add("Icon", typeof(uint));
+            var idColumn = _Table.Columns.Add("id", typeof(uint));
+            _Table.Columns.Add("SpellName" + LocaleIndex(_Language), typeof(string));
+            _Table.PrimaryKey = new[] { idColumn };
             _initialised = true;
         }
+
+        // The spell table columns are suffixed with the zero based locale, the language
+        // is one higher than that for everything except the unset and default cases
+        private static int LocaleIndex(int language) => language > 0 ? language - 1 : language;
 
         public bool IsInitialised() => _initialised;
         public bool HasAdapter() => _Adapter != null;
@@ -66,18 +77,29 @@ namespace SpellEditor.Sources.Controls
 
         public int GetLoadedRowCount() => _Table.Rows.Count;
 
+        private void RenameLocaleColumn(string prefix, int oldLanguage, int newLanguage)
+        {
+            var oldName = prefix + LocaleIndex(oldLanguage);
+            var newName = prefix + LocaleIndex(newLanguage);
+            if (oldName == newName || _Table.Columns[newName] != null)
+                return;
+            var column = _Table.Columns[oldName];
+            if (column != null)
+                column.ColumnName = newName;
+        }
+
         public string GetSpellNameById(uint spellId)
         {
             var result = _Table.Select($"id = {spellId}");
             return result.Length == 1 ? result[0]["SpellName" + (_Language - 1)].ToString() : "";
         }
 
-        public void PopulateSelectSpell(bool clearData = true)
+        public Task PopulateSelectSpell(bool clearData = true)
         {
             if (_Adapter == null)
-                return;
+                return Task.CompletedTask;
             if (_Table.Columns.Count == 0)
-                return;
+                return Task.CompletedTask;
 
             // Refresh language
             LocaleManager.Instance.MarkDirty();
@@ -87,29 +109,30 @@ namespace SpellEditor.Sources.Controls
                 var newLocale = LocaleManager.Instance.GetLocale(adapter);
                 if (newLocale != _Language && (newLocale != -1 || _Language == -1))
                 {
-                    try
-                    {
-                        _Table.Columns["SpellName" + _Language].ColumnName = "SpellName" + newLocale;
-                    }
-                    catch (DuplicateNameException /*exception*/)
-                    {
-                        // NOOP
-                    }   
+                    RenameLocaleColumn("SpellName", _Language, newLocale);
+                    RenameLocaleColumn("SpellRank", _Language, newLocale);
                     SetLanguage(newLocale);
                 }
 
                 var selectSpellWatch = new Stopwatch();
                 selectSpellWatch.Start();
                 _ContentsIndex = 0;
-                _ContentsCount = Items.Count;
                 _PendingRows.Clear();
-                var worker = new SpellListQueryWorker(adapter, selectSpellWatch) { WorkerReportsProgress = true };
+                _LoadFinished = false;
+                // Anything waiting on the previous load is now waiting on a superseded list
+                _LoadCompletion?.TrySetResult(true);
+                var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                _LoadCompletion = completion;
+                var generation = ++_LoadGeneration;
+                var worker = new SpellListQueryWorker(adapter, selectSpellWatch, generation) { WorkerReportsProgress = true };
                 worker.ProgressChanged += _worker_ProgressChanged;
 
                 worker.DoWork += delegate
                 {
                     // Validate
                     if (worker.Adapter == null || !Config.Config.IsInit)
+                        return;
+                    if (generation != _LoadGeneration)
                         return;
                     int locale = _Language;
                     if (locale > 0)
@@ -121,6 +144,7 @@ namespace SpellEditor.Sources.Controls
 
                     const uint pageSize = 5000;
                     uint lastId = 0;
+                    // Smaller first page so the list paints as soon as possible
                     DataRowCollection results = GetSpellNames(lastId, pageSize / 5, locale);
                     // Edge case of empty table after truncating, need to send a event to the handler
                     if (results != null && results.Count == 0)
@@ -129,10 +153,13 @@ namespace SpellEditor.Sources.Controls
                     }
                     while (results != null && results.Count != 0)
                     {
+                        if (generation != _LoadGeneration)
+                            return;
                         lastId = uint.Parse(results[results.Count - 1][0].ToString());
                         worker.ReportProgress(0, results);
                         results = GetSpellNames(lastId, pageSize, locale);
                     }
+                    _Table.AcceptChanges();
                 };
                 worker.RunWorkerCompleted += (sender, args) =>
                 {
@@ -141,8 +168,15 @@ namespace SpellEditor.Sources.Controls
 
                     spellListQueryWorker.Watch.Stop();
                     Logger.Info($"Loaded spell selection list contents in {spellListQueryWorker.Watch.ElapsedMilliseconds}ms");
+
+                    if (spellListQueryWorker.Generation != _LoadGeneration)
+                        return;
+                    _LoadFinished = true;
+                    PumpPendingRows();
                 };
                 worker.RunWorkerAsync();
+
+                return completion.Task;
             }
         }
 
@@ -208,7 +242,6 @@ namespace SpellEditor.Sources.Controls
 
             ItemsSource = newSrc;
             _ContentsIndex = newSrc.Count;
-            _ContentsCount = newSrc.Count;
         }
 
         private void RemoveSpellEntry(uint spellId)
@@ -221,7 +254,6 @@ namespace SpellEditor.Sources.Controls
 
             ItemsSource = newSrc;
             _ContentsIndex = newSrc.Count;
-            _ContentsCount = newSrc.Count;
         }
 
         private List<object> CurrentItemSource() =>
@@ -271,8 +303,8 @@ namespace SpellEditor.Sources.Controls
         {
             // Update UI
             _ContentsIndex = 0;
-            _ContentsCount = Items.Count;
             _PendingRows.Clear();
+            _LoadFinished = true;
             _Table.DefaultView.Sort = "id";
             // We have to call ToTable to return a new sorted data table
             // Returning the existing table will have new rows at the end of the collection
@@ -282,6 +314,9 @@ namespace SpellEditor.Sources.Controls
 
         private void _worker_ProgressChanged(object sender, ProgressChangedEventArgs e)
         {
+            if (sender is SpellListQueryWorker worker && worker.Generation != _LoadGeneration)
+                return;
+
             _RecordCache = null;
 
             var collection = (DataRowCollection)e.UserState;
@@ -307,13 +342,13 @@ namespace SpellEditor.Sources.Controls
             _PumpScheduled = false;
 
             var take = _PendingRows.Count < UiChunkSize ? _PendingRows.Count : UiChunkSize;
-            var newElements = new List<UIElement>();
+            // Replace the item source directly, adding each item would raise a high amount of events
+            var newSrc = CurrentItemSource();
             for (int i = 0; i < take; ++i)
             {
                 var row = _PendingRows[i];
                 // Reuse an existing UI element where we have one spare
-                if (_ContentsIndex < _ContentsCount && _ContentsIndex < Items.Count &&
-                    Items[_ContentsIndex] is SpellSelectionEntry existing)
+                if (_ContentsIndex < newSrc.Count && newSrc[_ContentsIndex] is SpellSelectionEntry existing)
                 {
                     existing.RefreshEntry(row, _Language);
                     ++_ContentsIndex;
@@ -324,31 +359,25 @@ namespace SpellEditor.Sources.Controls
                 entry.SetCopyClickAction(DuplicateAction);
                 entry.SetDeleteClickAction(DeleteAction);
                 entry.SetPasteClickAction(PasteAction);
-                newElements.Add(entry);
+                if (_ContentsIndex < newSrc.Count)
+                    newSrc[_ContentsIndex] = entry;
+                else
+                    newSrc.Add(entry);
                 ++_ContentsIndex;
             }
             _PendingRows.RemoveRange(0, take);
 
-            // Replace the item source directly, adding each item would raise a high amount of events
-            var src = ItemsSource;
-            var newSrc = new List<object>();
-            if (src != null)
-            {
-                // This will also delete any listbox items we no longer need
-                var enumerator = src.GetEnumerator();
-                for (int i = 0; i < _ContentsIndex; ++i)
-                {
-                    if (!enumerator.MoveNext())
-                        break;
-                    newSrc.Add(enumerator.Current);
-                }
-            }
+            // Only drop the leftover tail once every page is in, trimming per chunk would
+            // throw away the entries the next chunk is about to reuse
+            if (_LoadFinished && _PendingRows.Count == 0 && newSrc.Count > _ContentsIndex)
+                newSrc.RemoveRange(_ContentsIndex, newSrc.Count - _ContentsIndex);
 
-            newSrc.AddRange(newElements);
             ItemsSource = newSrc;
 
             if (_PendingRows.Count > 0)
                 SchedulePump();
+            else if (_LoadFinished)
+                _LoadCompletion?.TrySetResult(true);
         }
 
         // Keyset paged rather than OFFSET paged, MySQL rescans every skipped row on an OFFSET
@@ -358,8 +387,9 @@ namespace SpellEditor.Sources.Controls
                 string.Format(@"SELECT `id`,`SpellName{1}`,`SpellIconID`,`SpellRank{1}` FROM `{0}` WHERE `id` > {2} ORDER BY `id` LIMIT {3}",
                  "spell", locale, lastId, pageSize)))
             {
+                // AcceptChanges walks every row already in the table, so it is committed
+                // once the last page is in rather than once per page
                 _Table.Merge(newSpellNames, false, MissingSchemaAction.Add);
-                _Table.AcceptChanges();
 
                 return newSpellNames.Rows;
             }
@@ -411,11 +441,13 @@ namespace SpellEditor.Sources.Controls
         {
             public readonly IDatabaseAdapter Adapter;
             public readonly Stopwatch Watch;
+            public readonly int Generation;
 
-            public SpellListQueryWorker(IDatabaseAdapter adapter, Stopwatch watch)
+            public SpellListQueryWorker(IDatabaseAdapter adapter, Stopwatch watch, int generation)
             {
                 Adapter = adapter;
                 Watch = watch;
+                Generation = generation;
             }
         }
 
