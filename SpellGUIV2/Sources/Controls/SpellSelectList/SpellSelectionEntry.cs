@@ -131,7 +131,7 @@ namespace SpellEditor.Sources.Controls.SpellSelectList
             }
         }
 
-        private string BuildText(DataRow row, int language) => $" {row["id"]} - {row[$"SpellName{language - 1}"]}\n  {row[$"SpellRank{language - 1}"]}";
+        private string BuildText(DataRow row, int language) => SpellRecord.BuildText(row, language);
 
         public override void CopyItemClick(object sender, RoutedEventArgs args)
         {

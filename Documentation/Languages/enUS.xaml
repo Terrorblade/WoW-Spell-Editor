@@ -87,6 +87,41 @@
     <system:String x:Key="labRuneCost">Rune Cost:</system:String>
     <system:String x:Key="labSpellDescriptionVariables">Spell Description Variables:</system:String>
 	<system:String x:Key="labSpellPriority">Spell Priority:</system:String>
+    <system:String x:Key="labStanceBarOrder">Stance Bar Order:</system:String>
+    <system:String x:Key="labStanceBarOrderTip">Position this spell takes on the shapeshift bar, 0 when it is not a bar spell.</system:String>
+    <system:String x:Key="labModalNextSpell">Modal Next Spell:</system:String>
+    <system:String x:Key="labModalNextSpellTip">Spell the client puts on the cursor after this one is cast, used by things like the Ritual of Summoning portal.</system:String>
+    <system:String x:Key="labPowerDisplayId">Power Display Id:</system:String>
+    <system:String x:Key="labPowerDisplayIdTip">PowerDisplay.dbc entry that names the custom power bar this spell uses, 0 for none.</system:String>
+    <system:String x:Key="Reqs">Reqs</system:String>
+    <system:String x:Key="labCasterAuraStateNot">Caster Aura State Not:</system:String>
+    <system:String x:Key="labCasterAuraStateNotTip">Aura state the caster must not be in for this spell to be cast.</system:String>
+    <system:String x:Key="labTargetAuraStateNot">Target Aura State Not:</system:String>
+    <system:String x:Key="labTargetAuraStateNotTip">Aura state the target must not be in for this spell to be cast on them.</system:String>
+    <system:String x:Key="labCasterAuraSpell">Caster Aura Spell:</system:String>
+    <system:String x:Key="labCasterAuraSpellTip">Spell the caster must already have on them, 0 for no requirement.</system:String>
+    <system:String x:Key="labTargetAuraSpell">Target Aura Spell:</system:String>
+    <system:String x:Key="labTargetAuraSpellTip">Spell the target must already have on them, 0 for no requirement.</system:String>
+    <system:String x:Key="labExcludeCasterAuraSpell">Exclude Caster Aura Spell:</system:String>
+    <system:String x:Key="labExcludeCasterAuraSpellTip">Spell that blocks the cast if the caster has it, 0 for no requirement.</system:String>
+    <system:String x:Key="labExcludeTargetAuraSpell">Exclude Target Aura Spell:</system:String>
+    <system:String x:Key="labExcludeTargetAuraSpellTip">Spell that blocks the cast if the target has it, 0 for no requirement.</system:String>
+    <system:String x:Key="labMinimumFactionId">Minimum Faction Id:</system:String>
+    <system:String x:Key="labMinimumFactionIdTip">Faction.dbc entry the caster needs reputation with, 0 for no requirement.</system:String>
+    <system:String x:Key="labMinimumReputation">Minimum Reputation:</system:String>
+    <system:String x:Key="labMinimumReputationTip">Reputation rank needed with the minimum faction above.</system:String>
+    <system:String x:Key="labRequiredAuraVision">Required Aura Vision:</system:String>
+    <system:String x:Key="labRequiredAuraVisionTip">Aura vision value the caster needs before this spell can be used, 0 for no requirement.</system:String>
+    <system:String x:Key="reputation_rank_strings">
+        Hated |
+        Hostile |
+        Unfriendly |
+        Neutral |
+        Friendly |
+        Honored |
+        Revered |
+        Exalted
+    </system:String>
     <system:String x:Key="labSchool">School:</system:String>
     <system:String x:Key="checkboxPhysical">Physical</system:String>
     <system:String x:Key="checkboxHoly">Holy</system:String>
@@ -114,6 +149,7 @@
     <system:String x:Key="labChainTarget">Chain Target:</system:String>
     <system:String x:Key="labItemType">Item Type:</system:String>
     <system:String x:Key="labTriggerSpell">Trigger Spell:</system:String>
+    <system:String x:Key="labTriggerSpellPickTip">Browse for a spell</system:String>
     <system:String x:Key="labPointsPerComboPoint">Points Per Combo Point:</system:String>
     <system:String x:Key="labMiscValueA">Misc Value A:</system:String>
     <system:String x:Key="labMiscValueB">Misc Value B:</system:String>
@@ -186,6 +222,9 @@
     <system:String x:Key="labCustomAttributesTip">TrinityCore server side attributes from spell_custom_attr. Saved with the spell.</system:String>
     <system:String x:Key="labCreatureType">Creature Type:</system:String>
     <system:String x:Key="labStances">Stances:</system:String>
+    <system:String x:Key="labStancesTip">Shapeshift forms this spell can be cast in. Nothing checked means any form.</system:String>
+    <system:String x:Key="labStancesNot">Stances Not:</system:String>
+    <system:String x:Key="labStancesNotTip">Shapeshift forms this spell cannot be cast in. Nothing checked means no form is excluded.</system:String>
     <system:String x:Key="labCurrentIcon">Current Icon:</system:String>
     <system:String x:Key="labNewIcon">New Icon:</system:String>
     <system:String x:Key="labFiltericons">Filter icons:</system:String>

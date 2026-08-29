@@ -64,6 +64,7 @@ namespace SpellEditor
         /// <summary>The mask as read for the selected spell, null when it was never read.</summary>
         private uint? loadedCustomAttributes;
         private readonly List<ThreadSafeCheckBox> stancesBoxes = new List<ThreadSafeCheckBox>();
+        private readonly List<ThreadSafeCheckBox> stancesNotBoxes = new List<ThreadSafeCheckBox>();
         private readonly List<ThreadSafeCheckBox> targetCreatureTypeBoxes = new List<ThreadSafeCheckBox>();
         private readonly List<ThreadSafeCheckBox> targetBoxes = new List<ThreadSafeCheckBox>();
         private readonly List<ThreadSafeCheckBox> procBoxes = new List<ThreadSafeCheckBox>();
@@ -94,7 +95,9 @@ namespace SpellEditor
         private FilteredComboBox[] effectAuraNameBoxes;
         private ThreadSafeTextBox[] effectChainTargetBoxes;
         private ThreadSafeTextBox[] effectItemTypeBoxes;
-        private Button[] effectTriggerSpellBoxes;
+        private UIntTextBox[] effectTriggerSpellBoxes;
+        private Button[] effectTriggerSpellPickButtons;
+        private TextBlock[] effectTriggerSpellNames;
         private ThreadSafeTextBox[] effectAmplitudeBoxes;
         private Label[] miscValueLabelA;
         private ContentControl[] miscValueDynamicContentsA;
@@ -116,6 +119,21 @@ namespace SpellEditor
         public uint[] familyFlagsC = new uint[3];
 
         private uint[] effectTriggerSpells = new uint[3];
+
+        // Spell references outside of the effects: ModalNextSpell, CasterAuraSpell,
+        // TargetAuraSpell, ExcludeCasterAuraSpell, ExcludeTargetAuraSpell
+        private UIntTextBox[] spellRefBoxes;
+        private Button[] spellRefPickButtons;
+        private TextBlock[] spellRefNames;
+        private readonly uint[] spellRefValues = new uint[5];
+        private static readonly string[] SpellRefLabels =
+        {
+            "Modal Next Spell",
+            "Caster Aura Spell",
+            "Target Aura Spell",
+            "Exclude Caster Aura Spell",
+            "Exclude Target Aura Spell"
+        };
 
         #endregion
 
@@ -182,7 +200,12 @@ namespace SpellEditor
             effectChainTargetBoxes = new[] { ChainTarget1, ChainTarget2, ChainTarget3 };
             effectItemTypeBoxes = new[] { ItemType1, ItemType2, ItemType3 };
             effectTriggerSpellBoxes = new[] { TriggerSpell1, TriggerSpell2, TriggerSpell3 };
+            effectTriggerSpellPickButtons = new[] { TriggerSpellPick1, TriggerSpellPick2, TriggerSpellPick3 };
+            effectTriggerSpellNames = new[] { TriggerSpellName1, TriggerSpellName2, TriggerSpellName3 };
             effectAmplitudeBoxes = new[] { Amplitude1, Amplitude2, Amplitude3 };
+            spellRefBoxes = new[] { ModalNextSpell, CasterAuraSpell, TargetAuraSpell, ExcludeCasterAuraSpell, ExcludeTargetAuraSpell };
+            spellRefPickButtons = new[] { ModalNextSpellPick, CasterAuraSpellPick, TargetAuraSpellPick, ExcludeCasterAuraSpellPick, ExcludeTargetAuraSpellPick };
+            spellRefNames = new[] { ModalNextSpellName, CasterAuraSpellName, TargetAuraSpellName, ExcludeCasterAuraSpellName, ExcludeTargetAuraSpellName };
             miscValueLabelA = new[] { LabMiscValueA1, LabMiscValueA2, LabMiscValueA3 };
             miscValueDynamicContentsA = new[] { MiscValueA1DynamicContent, MiscValueA2DynamicContent, MiscValueA3DynamicContent };
             miscValueLabelB = new[] { LabMiscValueB1, LabMiscValueB2, LabMiscValueB3 };
@@ -369,6 +392,15 @@ namespace SpellEditor
             TargetAuraState.Items.Clear();
             string[] target_aura_state_strings = SafeTryFindResource("aura_state_strings").Split('|');
             foreach (string targetAuraState in target_aura_state_strings) { TargetAuraState.Items.Add(targetAuraState); }
+
+            CasterAuraStateNot.Items.Clear();
+            foreach (string auraState in caster_aura_state_strings) { CasterAuraStateNot.Items.Add(auraState); }
+
+            TargetAuraStateNot.Items.Clear();
+            foreach (string auraState in target_aura_state_strings) { TargetAuraStateNot.Items.Add(auraState); }
+
+            MinimumReputation.Items.Clear();
+            foreach (string rank in SafeTryFindResource("reputation_rank_strings").Split('|')) { MinimumReputation.Items.Add(rank); }
 
             EquippedItemInventoryTypeGrid.Children.Clear();
             equippedItemInventoryTypeMaskBoxes.Clear();
@@ -1120,6 +1152,17 @@ namespace SpellEditor
 
                     StancesGrid.Children.Add(box);
                     stancesBoxes.Add(box);
+
+                    // StancesNot is a separate exclusion mask over the same shapeshift forms
+                    ThreadSafeCheckBox notBox = new ThreadSafeCheckBox
+                    {
+                        Content = stance.ToString(),
+                        ToolTip = stance.ToString(),
+                        Margin = new Thickness(0, 5, 0, 0)
+                    };
+
+                    StancesNotGrid.Children.Add(notBox);
+                    stancesNotBoxes.Add(notBox);
                 }
 
                 var creatureTypeDbc = DBCManager.GetInstance().FindDbcForBinding("CreatureType");
@@ -1679,6 +1722,25 @@ namespace SpellEditor
 
                             row["Stances"] = mask;
                         }
+
+                        if (stancesNotBoxes[0].IsChecked.Value)
+                        {
+                            row["StancesNot"] = 0;
+                        }
+                        else
+                        {
+                            uint mask = 0;
+                            uint flag = 1;
+
+                            for (int f = 1; f < stancesNotBoxes.Count; ++f)
+                            {
+                                if (stancesNotBoxes[f].IsChecked.Value) { mask += flag; }
+
+                                flag += flag;
+                            }
+
+                            row["StancesNot"] = mask;
+                        }
                     }
 
                     if (isWotlkOrGreater)
@@ -1739,6 +1801,16 @@ namespace SpellEditor
                         row["CasterAuraState"] = CasterAuraState.SelectedIndex;
                     }
                     row["TargetAuraState"] = TargetAuraState.SelectedIndex;
+                    row["CasterAuraStateNot"] = CasterAuraStateNot.SelectedIndex;
+                    row["TargetAuraStateNot"] = TargetAuraStateNot.SelectedIndex;
+                    row["CasterAuraSpell"] = spellRefValues[1];
+                    row["TargetAuraSpell"] = spellRefValues[2];
+                    row["ExcludeCasterAuraSpell"] = spellRefValues[3];
+                    row["ExcludeTargetAuraSpell"] = spellRefValues[4];
+                    row["MinimumFactionId"] = uint.Parse(MinimumFactionId.Text);
+                    row["MinimumReputation"] = MinimumReputation.SelectedIndex;
+                    row["RequiredAuraVision"] = uint.Parse(RequiredAuraVision.Text);
+                    row["PowerDisplayId"] = uint.Parse(PowerDisplayId.Text);
 
                     row["RecoveryTime"] = uint.Parse(RecoveryTime.Text);
                     row["CategoryRecoveryTime"] = uint.Parse(CategoryRecoveryTime.Text);
@@ -1831,6 +1903,8 @@ namespace SpellEditor
                     row["ManaPerSecond"] = uint.Parse(ManaCostPerSecond.Text);
                     row["ManaPerSecondPerLevel"] = uint.Parse(PerSecondPerLevel.Text);
                     row["SpellPriority"] = int.Parse(SpellPriority.Text);
+                    row["StanceBarOrder"] = uint.Parse(StanceBarOrder.Text);
+                    row["ModalNextSpell"] = spellRefValues[0];
                     row["Speed"] = float.Parse(Speed.Text);
                     row["StackAmount"] = uint.Parse(Stacks.Text);
                     row["Totem1"] = uint.Parse(Totem1.Text);
@@ -2420,24 +2494,16 @@ namespace SpellEditor
             return false;
         }
 
-        // id + spell name for control selectors
-        private string GetSpellDescString(uint spellId)
+        private string GetSpellNameOrPlaceholder(uint spellId)
         {
             string name = GetSpellNameById(spellId);
 
-            if (string.IsNullOrEmpty(name))
-            {
-                if (spellId == 0)
-                    name = "None";
-                else
-                    name = "(Unknown Spell)";
-            }
+            if (!string.IsNullOrEmpty(name))
+                return name;
 
-
-            string spellstring = $"{spellId} - {name}";
-
-            return spellstring;
+            return spellId == 0 ? "None" : "(Unknown Spell)";
         }
+
 
         #region DynamicMiscValues
         // refreshes the UI to load the right miscvalue ui control, but doesn't load its value
@@ -2448,7 +2514,7 @@ namespace SpellEditor
             effectAuraNameBoxes[effectIndex - 1].IsEnabled = false;
             effectChainTargetBoxes[effectIndex - 1].IsEnabled = false;
             effectItemTypeBoxes[effectIndex - 1].IsEnabled = false;
-            effectTriggerSpellBoxes[effectIndex - 1].IsEnabled = false;
+            SetTriggerSpellEnabled(effectIndex - 1, false);
             effectAmplitudeBoxes[effectIndex - 1].IsEnabled = false;
 
             ContentControl DynamicContentA = miscValueDynamicContentsA[effectIndex - 1];
@@ -2495,7 +2561,7 @@ namespace SpellEditor
                 effectAuraNameBoxes[effectIndex - 1].IsEnabled = true;
                 effectChainTargetBoxes[effectIndex - 1].IsEnabled = true;
                 effectItemTypeBoxes[effectIndex - 1].IsEnabled = true;
-                effectTriggerSpellBoxes[effectIndex - 1].IsEnabled = true;
+                SetTriggerSpellEnabled(effectIndex - 1, true);
                 effectAmplitudeBoxes[effectIndex - 1].IsEnabled = true;
 
                 DynamicContentA.IsEnabled = true;
@@ -2549,7 +2615,7 @@ namespace SpellEditor
                 effectAuraNameBoxes[effectIndex - 1].IsEnabled = true;
                 effectChainTargetBoxes[effectIndex - 1].IsEnabled = true;
                 effectItemTypeBoxes[effectIndex - 1].IsEnabled = true;
-                effectTriggerSpellBoxes[effectIndex - 1].IsEnabled = true;
+                SetTriggerSpellEnabled(effectIndex - 1, true);
                 effectAmplitudeBoxes[effectIndex - 1].IsEnabled = true;
             }
             else
@@ -2558,7 +2624,7 @@ namespace SpellEditor
                 effectAuraNameBoxes[effectIndex - 1].IsEnabled = spellEffectData.usesAura;
                 effectChainTargetBoxes[effectIndex - 1].IsEnabled = spellEffectData.UsesChainTarget;
                 effectItemTypeBoxes[effectIndex - 1].IsEnabled = spellEffectData.UsesItemType;
-                effectTriggerSpellBoxes[effectIndex - 1].IsEnabled = spellEffectData.UsesSpell;
+                SetTriggerSpellEnabled(effectIndex - 1, spellEffectData.UsesSpell);
                 effectAmplitudeBoxes[effectIndex - 1].IsEnabled = spellEffectData.UsesAmplitude;
             }
 
@@ -3293,6 +3359,23 @@ namespace SpellEditor
                             flag += flag;
                         }
                     }
+
+                    mask = uint.Parse(row["StancesNot"].ToString());
+                    if (mask == 0)
+                    {
+                        stancesNotBoxes[0].ThreadSafeChecked = true;
+                        for (int f = 1; f < stancesNotBoxes.Count; ++f) { stancesNotBoxes[f].ThreadSafeChecked = false; }
+                    }
+                    else
+                    {
+                        stancesNotBoxes[0].ThreadSafeChecked = false;
+                        uint flag = 1;
+                        for (int f = 1; f < stancesNotBoxes.Count; ++f)
+                        {
+                            stancesNotBoxes[f].ThreadSafeChecked = ((mask & flag) != 0);
+                            flag += flag;
+                        }
+                    }
                 }
                 if (isWotlkOrGreater)
                 {
@@ -3309,6 +3392,7 @@ namespace SpellEditor
                 attributes6.ForEach(box => box.IsEnabled = isTbcOrGreater);
                 attributes7.ForEach(box => box.IsEnabled = isWotlkOrGreater);
                 stancesBoxes.ForEach(box => box.IsEnabled = isTbcOrGreater);
+                stancesNotBoxes.ForEach(box => box.IsEnabled = isTbcOrGreater);
 
                 updateProgress("Updating targets...");
                 mask = uint.Parse(row["Targets"].ToString());
@@ -3360,6 +3444,16 @@ namespace SpellEditor
                 updateProgress("Updating caster aura state...");
                 CasterAuraState.ThreadSafeIndex = uint.Parse(row["CasterAuraState"].ToString());
                 TargetAuraState.ThreadSafeIndex = uint.Parse(row["TargetAuraState"].ToString());
+                CasterAuraStateNot.ThreadSafeIndex = uint.Parse(row["CasterAuraStateNot"].ToString());
+                TargetAuraStateNot.ThreadSafeIndex = uint.Parse(row["TargetAuraStateNot"].ToString());
+                SetSpellRef(1, uint.Parse(row["CasterAuraSpell"].ToString()));
+                SetSpellRef(2, uint.Parse(row["TargetAuraSpell"].ToString()));
+                SetSpellRef(3, uint.Parse(row["ExcludeCasterAuraSpell"].ToString()));
+                SetSpellRef(4, uint.Parse(row["ExcludeTargetAuraSpell"].ToString()));
+                MinimumFactionId.ThreadSafeText = uint.Parse(row["MinimumFactionId"].ToString());
+                MinimumReputation.ThreadSafeIndex = uint.Parse(row["MinimumReputation"].ToString());
+                RequiredAuraVision.ThreadSafeText = uint.Parse(row["RequiredAuraVision"].ToString());
+                PowerDisplayId.ThreadSafeText = uint.Parse(row["PowerDisplayId"].ToString());
 
                 updateProgress("Updating cast time selection...");
                 var loadCastTimes = (SpellCastTimes)DBCManager.GetInstance().FindDbcForBinding("SpellCastTimes");
@@ -3466,6 +3560,8 @@ namespace SpellEditor
                 {
                     SpellPriority.IsEnabled = false;
                 }
+                StanceBarOrder.ThreadSafeText = uint.Parse(row["StanceBarOrder"].ToString());
+                SetSpellRef(0, uint.Parse(row["ModalNextSpell"].ToString()));
                 updateProgress("Updating spell range selection...");
                 var loadRanges = (SpellRange)DBCManager.GetInstance().FindDbcForBinding("SpellRange");
                 Range.ThreadSafeIndex = loadRanges.UpdateSpellRangeSelection(
@@ -3610,12 +3706,9 @@ namespace SpellEditor
                 // TriggerSpell1.ThreadSafeText = row["EffectTriggerSpell1"].ToString();
                 // TriggerSpell2.ThreadSafeText = row["EffectTriggerSpell2"].ToString();
                 // TriggerSpell3.ThreadSafeText = row["EffectTriggerSpell3"].ToString();
-                effectTriggerSpells[0] = uint.Parse(row["EffectTriggerSpell1"].ToString());
-                effectTriggerSpells[1] = uint.Parse(row["EffectTriggerSpell2"].ToString());
-                effectTriggerSpells[2] = uint.Parse(row["EffectTriggerSpell3"].ToString());
-                TriggerSpell1.Content = GetSpellDescString(effectTriggerSpells[0]);
-                TriggerSpell2.Content = GetSpellDescString(effectTriggerSpells[1]);
-                TriggerSpell3.Content = GetSpellDescString(effectTriggerSpells[2]);
+                SetTriggerSpell(0, uint.Parse(row["EffectTriggerSpell1"].ToString()));
+                SetTriggerSpell(1, uint.Parse(row["EffectTriggerSpell2"].ToString()));
+                SetTriggerSpell(2, uint.Parse(row["EffectTriggerSpell3"].ToString()));
 
                 PointsPerComboPoint1.ThreadSafeText = row["EffectPointsPerComboPoint1"].ToString();
                 PointsPerComboPoint2.ThreadSafeText = row["EffectPointsPerComboPoint2"].ToString();
@@ -5390,7 +5483,7 @@ namespace SpellEditor
                     if (spellEffectData.UsesItemType == false)
                         effectItemTypeBoxes[effect_id].Text = "0";
                     if (spellEffectData.UsesSpell == false)
-                        effectTriggerSpellBoxes[effect_id].Content = "0 - None";
+                        SetTriggerSpell(effect_id, 0);
                     if (spellEffectData.UsesAmplitude == false)
                         effectAmplitudeBoxes[effect_id].Text = "0";
                 }
@@ -5803,31 +5896,80 @@ namespace SpellEditor
 
         }
 
+        private void SetTriggerSpellEnabled(int effectIndex, bool enabled)
+        {
+            effectTriggerSpellBoxes[effectIndex].IsEnabled = enabled;
+            effectTriggerSpellPickButtons[effectIndex].IsEnabled = enabled;
+        }
+
+        private void SetTriggerSpell(int effectIndex, uint spellId)
+        {
+            effectTriggerSpells[effectIndex] = spellId;
+            effectTriggerSpellBoxes[effectIndex].UIntValue = spellId;
+            effectTriggerSpellNames[effectIndex].Text = GetSpellNameOrPlaceholder(spellId);
+        }
+
+        private void TriggerSpell_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double?> e)
+        {
+            if (effectTriggerSpellBoxes == null)
+                return;
+
+            int effect_index = Array.IndexOf(effectTriggerSpellBoxes, sender as UIntTextBox);
+            if (effect_index < 0)
+                return;
+
+            uint spellId = effectTriggerSpellBoxes[effect_index].UIntValue;
+            effectTriggerSpells[effect_index] = spellId;
+            effectTriggerSpellNames[effect_index].Text = GetSpellNameOrPlaceholder(spellId);
+        }
+
         private void TriggerSpell_Click(object sender, RoutedEventArgs e)
         {
-            int effect_index = 0;
-
-            if (sender == TriggerSpell2)
-                effect_index = 1;
-            else if (sender == TriggerSpell3)
-                effect_index = 2;
-            else
-                Debug.Assert(sender == TriggerSpell1);
+            int effect_index = Array.IndexOf(effectTriggerSpellPickButtons, sender as Button);
+            Debug.Assert(effect_index >= 0);
+            if (effect_index < 0)
+                return;
 
             uint spell_id = effectTriggerSpells[effect_index];
             string select_text = $"Selecting for Effect#{effect_index} Trigger Spell";
             var dlg = new SpellPickerDialog(this, spell_id, select_text);
 
             if (dlg.ShowDialog() == true)
-            {
-                // when closed
-                uint selectedId = dlg.SelectedId;
-                effectTriggerSpells[effect_index] = selectedId;
+                SetTriggerSpell(effect_index, dlg.SelectedId);
+        }
 
-                string text = GetSpellDescString(selectedId);
-                effectTriggerSpellBoxes[effect_index].Content = text;
+        private void SetSpellRef(int index, uint spellId)
+        {
+            spellRefValues[index] = spellId;
+            spellRefBoxes[index].UIntValue = spellId;
+            spellRefNames[index].Text = GetSpellNameOrPlaceholder(spellId);
+        }
 
-            }
+        private void SpellRef_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double?> e)
+        {
+            if (spellRefBoxes == null)
+                return;
+
+            int index = Array.IndexOf(spellRefBoxes, sender as UIntTextBox);
+            if (index < 0)
+                return;
+
+            uint spellId = spellRefBoxes[index].UIntValue;
+            spellRefValues[index] = spellId;
+            spellRefNames[index].Text = GetSpellNameOrPlaceholder(spellId);
+        }
+
+        private void SpellRef_Click(object sender, RoutedEventArgs e)
+        {
+            int index = Array.IndexOf(spellRefPickButtons, sender as Button);
+            Debug.Assert(index >= 0);
+            if (index < 0)
+                return;
+
+            var dlg = new SpellPickerDialog(this, spellRefValues[index], $"Selecting for {SpellRefLabels[index]}");
+
+            if (dlg.ShowDialog() == true)
+                SetSpellRef(index, dlg.SelectedId);
         }
 
         #region Effect copy and reset
@@ -5963,8 +6105,7 @@ namespace SpellEditor
                 if (isWotlkOrGreater)
                     bonusMultipliers[i].ThreadSafeText = read("EffectBonusMultiplier");
 
-                effectTriggerSpells[i] = uint.Parse(read("EffectTriggerSpell"));
-                effectTriggerSpellBoxes[i].Content = GetSpellDescString(effectTriggerSpells[i]);
+                SetTriggerSpell(i, uint.Parse(read("EffectTriggerSpell")));
 
                 // Rebuilding the misc value control first, otherwise the value goes into whatever
                 // control the previous effect type left behind

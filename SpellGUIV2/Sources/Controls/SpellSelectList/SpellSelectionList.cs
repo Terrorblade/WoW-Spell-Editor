@@ -28,7 +28,10 @@ namespace SpellEditor.Sources.Controls
         private DataTable _Table = new DataTable();
         public DataTable Table { get { return _Table; } }
         private bool _initialised = false;
-        private bool _EnableEdits = true;
+
+        // Snapshot of _Table shared with any other list that wants to show the same spells,
+        // rebuilt lazily whenever the table changes
+        private List<SpellRecord> _RecordCache;
 
         // Rows waiting to be turned into list entries. Built in small chunks at background
         // dispatcher priority so a large spell table never locks the UI up.
@@ -143,32 +146,22 @@ namespace SpellEditor.Sources.Controls
             }
         }
 
-        public void PopulateFromOther(SpellSelectionList source)
+        public List<SpellRecord> GetRecords()
         {
-            _EnableEdits = false; // quick way to disable right click options with popup
+            if (_RecordCache != null)
+                return _RecordCache;
 
-            LocaleManager.Instance.MarkDirty();
+            _Table.DefaultView.Sort = "id";
+            // ToTable returns a new sorted table, the existing one has new rows at the end
+            var rows = _Table.DefaultView.ToTable().Rows;
 
-            _Table = source.Table;
+            var records = new List<SpellRecord>(rows.Count);
+            foreach (DataRow row in rows)
+                records.Add(new SpellRecord(row, _Language));
 
-            /*
-            // Test copying from mainwindow list instead of recreating new
-            var newElements = new List<UIElement>();
-            foreach (var item in source.Items)
-            {
-                if (item is SpellSelectionEntry entry)
-                {
-                    // create copy
-                    SpellSelectionEntry new_item = new SpellSelectionEntry(entry);
-                    newElements.Add(entry);
-                }
-            }
-            var newSrc = new List<object>();
-            newSrc.AddRange(newElements);
-            ItemsSource = newSrc;*/
+            _RecordCache = records;
 
-            // if items list is empty, it will create new items from _Table
-            RefreshSpellList();
+            return _RecordCache;
         }
 
         public void AddNewSpell(uint copyFrom, uint copyTo)
@@ -189,6 +182,7 @@ namespace SpellEditor.Sources.Controls
             {
                 _Table.Merge(result, false, MissingSchemaAction.Add);
                 _Table.AcceptChanges();
+                _RecordCache = null;
                 if (result.Rows.Count > 0)
                     InsertSpellEntry(result.Rows[0]);
             }
@@ -200,12 +194,9 @@ namespace SpellEditor.Sources.Controls
         {
             var entry = new SpellSelectionEntry();
             entry.RefreshEntry(row, _Language);
-            if (_EnableEdits)
-            {
-                entry.SetCopyClickAction(DuplicateAction);
-                entry.SetDeleteClickAction(DeleteAction);
-                entry.SetPasteClickAction(PasteAction);
-            }
+            entry.SetCopyClickAction(DuplicateAction);
+            entry.SetDeleteClickAction(DeleteAction);
+            entry.SetPasteClickAction(PasteAction);
 
             var spellId = entry.GetSpellId();
             var newSrc = CurrentItemSource();
@@ -260,6 +251,7 @@ namespace SpellEditor.Sources.Controls
                 data["SpellIconID"] = row["SpellIconID"];
                 data["SpellRank" + lang] = row["SpellRank" + lang];
                 data.EndEdit();
+                _RecordCache = null;
             }
         }
 
@@ -270,6 +262,7 @@ namespace SpellEditor.Sources.Controls
             // Delete from spell list
             _Table.Select($"id = {spellId}").First().Delete();
             _Table.AcceptChanges();
+            _RecordCache = null;
             // Refresh UI
             RemoveSpellEntry(spellId);
         }
@@ -289,6 +282,8 @@ namespace SpellEditor.Sources.Controls
 
         private void _worker_ProgressChanged(object sender, ProgressChangedEventArgs e)
         {
+            _RecordCache = null;
+
             var collection = (DataRowCollection)e.UserState;
             foreach (DataRow row in collection)
                 _PendingRows.Add(row);
@@ -326,12 +321,9 @@ namespace SpellEditor.Sources.Controls
                 }
                 var entry = new SpellSelectionEntry();
                 entry.RefreshEntry(row, _Language);
-                if (_EnableEdits)
-                {
-                    entry.SetCopyClickAction(DuplicateAction);
-                    entry.SetDeleteClickAction(DeleteAction);
-                    entry.SetPasteClickAction(PasteAction);
-                }
+                entry.SetCopyClickAction(DuplicateAction);
+                entry.SetDeleteClickAction(DeleteAction);
+                entry.SetPasteClickAction(PasteAction);
                 newElements.Add(entry);
                 ++_ContentsIndex;
             }

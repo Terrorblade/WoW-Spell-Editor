@@ -197,9 +197,9 @@ namespace SpellEditor
             };
             confirmBtn.Click += SaveSQLiteConfirmBtn_Click;
 
-            dbFileNameText.Margin =  new Thickness(10, 5, 10, 5);
+            dbFileNameLabel.Margin = new Thickness(10, 5, 10, 5);
             dbFileNameText.Margin = new Thickness(10, 5, 10, 5);
-            confirmBtn.Margin = new Thickness(3, 10, 3, 2);
+            confirmBtn.Margin = new Thickness(10, 10, 10, 5);
             confirmBtn.MinHeight = 40;
 
             Grid.SetRow(dbFileNameLabel, row);
@@ -264,7 +264,7 @@ namespace SpellEditor
             portText.Margin = margin;
             databaseLabel.Margin = margin;
             databaseText.Margin = margin;
-            confirmBtn.Margin = new Thickness(3, 10, 3, 2);
+            confirmBtn.Margin = new Thickness(10, 10, 10, 5);
             confirmBtn.MinHeight = 40;
 
             Grid.SetRow(hostLabel, row);
@@ -343,7 +343,8 @@ namespace SpellEditor
             checkbox.IsChecked = Config.DynamicMiscValueFields;
             checkbox.Checked += DynamicMiscValueFields_Checked;
             checkbox.Unchecked += DynamicMiscValueFields_Checked;
-            checkbox.ToolTip = "When this is turned on, MiscValue fields UI will dynamically update based on content type, for example a power selection dropdown for Power auras.";
+            checkbox.ToolTip = "When this is turned on, MiscValue fields UI will dynamically update based on content type, for example a power selection dropdown for Power auras. " +
+                "It also greys out the effect fields the selected spell effect does not use. Turn it off to leave every effect field editable.";
 
             Grid.SetRow(label, currentRow);
             Grid.SetRow(checkbox, currentRow++);
@@ -546,7 +547,7 @@ namespace SpellEditor
             {
                 Content = "Save Changes",
                 Foreground = Brushes.Black,
-                Margin = new Thickness(3, 10, 3, 2),
+                Margin = new Thickness(10, 10, 10, 5),
                 MinHeight = 40
             };
             confirmBtn.Click += SaveTrinityConfirmBtn_Click;
@@ -555,7 +556,7 @@ namespace SpellEditor
             {
                 Content = "Test Connection",
                 Foreground = Brushes.Black,
-                Margin = new Thickness(3, 10, 3, 2),
+                Margin = new Thickness(10, 10, 10, 5),
                 MinHeight = 40
             };
             testBtn.Click += TestTrinityConnection_Click;
