@@ -126,6 +126,12 @@
     <system:String x:Key="labEffectBonusMultiplier2">EffectBonusMultiplier 2:</system:String>
     <system:String x:Key="labDamageMultiplier3">Damage Multiplier 3:</system:String>
     <system:String x:Key="labEffectBonusMultiplier3">EffectBonusMultiplier 3:</system:String>
+    <system:String x:Key="effectCopyFrom">Copy From Spell</system:String>
+    <system:String x:Key="effectCopyFromTip">Pick another spell and copy the same numbered effect from it into this one.</system:String>
+    <system:String x:Key="effectCopyFromPrompt">Selecting the spell to copy Effect#{0} from</system:String>
+    <system:String x:Key="effectCopyFromMissing">Spell {0} was not found.</system:String>
+    <system:String x:Key="effectReset">Reset Effect</system:String>
+    <system:String x:Key="effectResetTip">Clear this effect, putting every field back to the value an unused effect has.</system:String>
     <system:String x:Key="targetClassMaskSpells">Class Mask Target Spells:</system:String>
     <system:String x:Key="filterClassMaskSpells">Filter Target Spells:</system:String>
 	<system:String x:Key="labSpellSchoolMask">Effect School Types :</system:String>
@@ -176,6 +182,8 @@
     <system:String x:Key="labAttributesEx5">Attributes Ex5:</system:String>
     <system:String x:Key="labAttributesEx6">Attributes Ex6:</system:String>
     <system:String x:Key="labAttributesEx7">Attributes Ex7:</system:String>
+    <system:String x:Key="labCustomAttributes">Custom Attributes:</system:String>
+    <system:String x:Key="labCustomAttributesTip">TrinityCore server side attributes from spell_custom_attr. Saved with the spell.</system:String>
     <system:String x:Key="labCreatureType">Creature Type:</system:String>
     <system:String x:Key="labStances">Stances:</system:String>
     <system:String x:Key="labCurrentIcon">Current Icon:</system:String>
@@ -2337,6 +2345,275 @@
         On Mainhand Autoattack Hit |
         On Offhand Autoattack Hit |
         On Death
+    </system:String>
+    <!--#endregion-->
+    <!--#endregion-->
+    <!--#region TrinityCore integration-->
+    <system:String x:Key="TrinityCore">TrinityCore</system:String>
+    <!--#region TrinityCore UI-->
+    <system:String x:Key="trinity_connect">Connect</system:String>
+    <system:String x:Key="trinity_reconnect">Reconnect</system:String>
+    <system:String x:Key="trinity_settings">Settings</system:String>
+    <system:String x:Key="trinity_not_connected">Not connected.</system:String>
+    <system:String x:Key="trinity_connecting">Connecting...</system:String>
+    <system:String x:Key="trinity_connected">Connected to {0} on {1}.</system:String>
+    <system:String x:Key="trinity_connect_failed">Could not connect: {0}</system:String>
+    <system:String x:Key="trinity_missing_tables">These tables are not in the database, so their tabs are turned off: {0}.</system:String>
+    <system:String x:Key="trinity_disabled">The TrinityCore integration is turned off. Turn it on and enter your world database details in the settings.</system:String>
+    <system:String x:Key="trinity_add_row">Add</system:String>
+    <system:String x:Key="trinity_delete_row">Remove</system:String>
+    <system:String x:Key="trinity_save_changes">Save Changes</system:String>
+    <system:String x:Key="trinity_revert">Revert</system:String>
+    <system:String x:Key="trinity_reload">Reload</system:String>
+    <system:String x:Key="trinity_copy_sql">Copy SQL</system:String>
+    <system:String x:Key="trinity_copy_sql_tip">Copy the statements this save would run to the clipboard instead of applying them</system:String>
+    <system:String x:Key="trinity_raw_value">Raw value</system:String>
+    <system:String x:Key="trinity_loading">Loading...</system:String>
+    <system:String x:Key="trinity_no_spell_selected">Pick a spell to see its data.</system:String>
+    <system:String x:Key="trinity_row_added">Added. It is not in the database until you save.</system:String>
+    <system:String x:Key="trinity_row_removed">Marked for removal. Save to apply.</system:String>
+    <system:String x:Key="trinity_nothing_to_save">Nothing has changed.</system:String>
+    <system:String x:Key="trinity_saving">Saving...</system:String>
+    <system:String x:Key="trinity_saved">Saved {0} change(s). Reload the server or run .reload for it to take effect.</system:String>
+    <system:String x:Key="trinity_reverted">Unsaved changes discarded.</system:String>
+    <system:String x:Key="trinity_sql_copied">{0} statement(s) copied to the clipboard.</system:String>
+    <system:String x:Key="trinity_pick_spell">Select spell</system:String>
+    <system:String x:Key="trinity_unknown_value">Unknown</system:String>
+    <system:String x:Key="trinity_unknown_spell">Not in Spell.dbc</system:String>
+    <system:String x:Key="trinity_nested_group">Group {0}</system:String>
+    <system:String x:Key="trinity_rank_chain_first">Rank {0} of {1}, and the first rank of the chain. Rows written against it can cover every rank.</system:String>
+    <system:String x:Key="trinity_rank_chain_shared">Rank {0} of {1}. Rows written against rank 1, {2}, count for this rank too and are listed below.</system:String>
+    <system:String x:Key="trinity_rank_chain_own">Rank {0} of {1}, chain starting at {2}. This table is not shared between ranks, each rank needs its own rows.</system:String>
+    <system:String x:Key="trinity_row_from_rank">Written against rank {0}, {1}. The core applies it to every rank in the chain, including this one.</system:String>
+    <system:String x:Key="trinity_row_from_other_spell">Written against {0}, and the core applies it to this spell as well.</system:String>
+    <system:String x:Key="trinity_option_all_ranks">Apply to every rank of this spell</system:String>
+    <system:String x:Key="trinity_option_on_aura_removed">Fire when the aura is removed</system:String>
+    <system:String x:Key="trinity_option_remove_instead">Remove it, or grant immunity, instead of applying it</system:String>
+    <system:String x:Key="trinity_error_cell">Row {0}, {1}: {2}</system:String>
+    <system:String x:Key="trinity_error_key_empty">this field cannot be empty</system:String>
+    <system:String x:Key="trinity_error_not_float">expected a number such as 0.15</system:String>
+    <system:String x:Key="trinity_error_not_int">expected a whole number</system:String>
+    <system:String x:Key="trinity_error_not_uint">expected a positive whole number, or a mask written as 0x1F</system:String>
+    <system:String x:Key="trinity_error_group_range">group ids from {0} to {1} are reserved for groups the core declares itself, use {1} or higher</system:String>
+    <!--#endregion-->
+    <!--#region TrinityCore table headers and descriptions-->
+    <system:String x:Key="trinity_tab_spell_proc">Proc</system:String>
+    <system:String x:Key="trinity_desc_spell_proc">Controls when and how often the aura on this spell procs.</system:String>
+    <system:String x:Key="trinity_empty_spell_proc">This spell has no proc data. The core falls back to the proc chance and flags in Spell.dbc.</system:String>
+    <system:String x:Key="trinity_tab_spell_linked_spell">Links</system:String>
+    <system:String x:Key="trinity_desc_spell_linked_spell">Casts, applies, or removes another spell when this one is cast, hits, or applies its aura.</system:String>
+    <system:String x:Key="trinity_empty_spell_linked_spell">This spell is not linked to any other spell.</system:String>
+    <system:String x:Key="trinity_tab_spell_script_names">Scripts</system:String>
+    <system:String x:Key="trinity_desc_spell_script_names">Attaches a C++ SpellScript or AuraScript from the server binary to this spell.</system:String>
+    <system:String x:Key="trinity_empty_spell_script_names">No scripts are attached to this spell.</system:String>
+    <system:String x:Key="trinity_tab_spell_bonus_data">Bonus</system:String>
+    <system:String x:Key="trinity_desc_spell_bonus_data">Overrides the spell power and attack power coefficients the core would otherwise calculate.</system:String>
+    <system:String x:Key="trinity_empty_spell_bonus_data">This spell has no coefficient override. The core works them out from the cast time and effects.</system:String>
+    <system:String x:Key="trinity_tab_spell_group">Groups</system:String>
+    <system:String x:Key="trinity_desc_spell_group">Groups this spell belongs to. spell_group_stack_rules then decides how the members stack.</system:String>
+    <system:String x:Key="trinity_empty_spell_group">This spell is not in any group.</system:String>
+    <system:String x:Key="trinity_tab_spell_threat">Threat</system:String>
+    <system:String x:Key="trinity_desc_spell_threat">Overrides how much threat this spell generates.</system:String>
+    <system:String x:Key="trinity_empty_spell_threat">This spell has no threat override. Threat comes from the damage or healing done.</system:String>
+    <system:String x:Key="trinity_custom_attr_unavailable">the world database could not be reached</system:String>
+    <system:String x:Key="trinity_custom_attr_save_failed">Saved the spell, but the custom attributes could not be written: {0}</system:String>
+    <system:String x:Key="trinity_tab_spell_ranks">Ranks</system:String>
+    <system:String x:Key="trinity_desc_spell_ranks">The rank chain this spell is part of. Proc data, coefficients, threat, groups and scripts written against rank 1 apply to the whole chain.</system:String>
+    <system:String x:Key="trinity_empty_spell_ranks">This spell is not part of a rank chain. Talent ranks come from Talent.dbc rather than this table, so they are never listed here.</system:String>
+    <!--#endregion-->
+    <!--#region TrinityCore field labels, one entry per column in column order-->
+    <system:String x:Key="trinity_labels_spell_proc">
+        Spell |
+        Required school |
+        Required spell family |
+        Family mask 1 |
+        Family mask 2 |
+        Family mask 3 |
+        Proc flags |
+        Required spell type |
+        Proc phase |
+        Required hit result |
+        Proc attributes |
+        Effects that do not proc |
+        Procs per minute |
+        Proc chance |
+        Internal cooldown (ms) |
+        Charges
+    </system:String>
+    <system:String x:Key="trinity_labels_spell_linked_spell">
+        Trigger spell |
+        Linked spell |
+        Fires on |
+        Comment
+    </system:String>
+    <system:String x:Key="trinity_labels_spell_script_names">
+        Spell |
+        Script name
+    </system:String>
+    <system:String x:Key="trinity_labels_spell_bonus_data">
+        Spell |
+        Direct spell power |
+        Periodic spell power |
+        Direct attack power |
+        Periodic attack power |
+        Comment
+    </system:String>
+    <system:String x:Key="trinity_labels_spell_group">
+        Group id |
+        Spell
+    </system:String>
+    <system:String x:Key="trinity_labels_spell_threat">
+        Spell |
+        Flat threat |
+        Threat multiplier |
+        Attack power share
+    </system:String>
+    <system:String x:Key="trinity_labels_spell_ranks">
+        First rank |
+        Spell |
+        Rank
+    </system:String>
+    <!--#endregion-->
+    <!--#region TrinityCore column tooltips, one entry per column in column order-->
+    <system:String x:Key="trinity_tips_spell_proc">
+        Spell id the proc data belongs to. A negative id applies it to every rank of the spell. |
+        If not zero, the triggering spell must be of one of these schools. |
+        If not zero, the triggering spell must have this SpellFamilyName. |
+        If not zero, the triggering spell must match these SpellFamilyFlags (first 32 bits). |
+        If not zero, the triggering spell must match these SpellFamilyFlags (second 32 bits). |
+        If not zero, the triggering spell must match these SpellFamilyFlags (third 32 bits). |
+        If not zero, overrides the ProcTypeMask from Spell.dbc and decides which events can proc. |
+        If not zero, the triggering spell must do damage, healing, or neither. |
+        If not zero, the phase of the cast the proc happens on. |
+        If not zero, the hit result required for the proc. Defaults to normal and critical hits. |
+        Extra proc requirements, see ProcAttributes in SpellMgr.h. |
+        Spell effects that should not proc this aura. |
+        If not zero, proc chance is this value multiplied by the caster weapon speed over 60. |
+        If not zero, overrides the proc chance from Spell.dbc. Ignored when procs per minute is set. |
+        Internal cooldown in milliseconds between procs. |
+        If not zero, overrides the proc charges from Spell.dbc. Zero means unlimited.
+    </system:String>
+    <system:String x:Key="trinity_tips_spell_linked_spell">
+        Spell that triggers the link. A negative id means the link fires when the aura is removed. |
+        Spell that gets applied. A negative id removes that spell instead, or grants immunity for aura links. |
+        When the link fires. Cast, hit, or aura applied. |
+        Free text note, shown only in the database.
+    </system:String>
+    <system:String x:Key="trinity_tips_spell_script_names">
+        Spell id the script is attached to. A negative id applies it to every rank of the spell. |
+        Name the script registers itself with in the server source.
+    </system:String>
+    <system:String x:Key="trinity_tips_spell_bonus_data">
+        Spell id the coefficients apply to. |
+        Spell power coefficient for the direct damage or healing part. |
+        Spell power coefficient for the periodic part. |
+        Attack power coefficient for the direct damage or healing part. |
+        Attack power coefficient for the periodic part. |
+        Free text note, shown only in the database.
+    </system:String>
+    <system:String x:Key="trinity_tips_spell_group">
+        Group id. Ids 1 to 4 are defined by the core, custom groups must be 1000 or greater. |
+        Spell in the group.
+    </system:String>
+    <system:String x:Key="trinity_tips_spell_threat">
+        Spell id the threat data applies to. |
+        Flat threat added on top of the damage or healing done. Leave empty for none. |
+        Threat multiplier for the damage or healing done. |
+        Extra threat taken from a share of the caster attack power.
+    </system:String>
+    <system:String x:Key="trinity_tips_spell_ranks">
+        Rank 1 of the chain. Every row in the same chain repeats this id. |
+        Spell that sits at this rank. Each spell can only be in one chain. |
+        Position in the chain, starting at 1. The core drops the chain if the ranks are not 1 to n with no gaps.
+    </system:String>
+    <!--#endregion-->
+    <!--#region TrinityCore flag and value lists-->
+    <system:String x:Key="trinity_school_mask_strings">
+        Physical |
+        Holy |
+        Fire |
+        Nature |
+        Frost |
+        Shadow |
+        Arcane
+    </system:String>
+    <system:String x:Key="trinity_proc_spell_type_strings">
+        Damage |
+        Heal |
+        Neither damage nor heal
+    </system:String>
+    <system:String x:Key="trinity_proc_spell_phase_strings">
+        Cast |
+        Hit |
+        Finish
+    </system:String>
+    <system:String x:Key="trinity_proc_hit_strings">
+        Normal (non critical) hit |
+        Critical |
+        Miss |
+        Full resist |
+        Dodge |
+        Parry |
+        Block (partial or full) |
+        Evade |
+        Immune |
+        Deflect |
+        Absorb (partial or full) |
+        Reflect |
+        Interrupt |
+        Full block
+    </system:String>
+    <system:String x:Key="trinity_proc_attributes_strings">
+        Proc target must give exp or honor |
+        Can proc from triggered spells |
+        Triggering spell must have a mana cost |
+        Triggering spell must be affected by this aura |
+        Reduced proc chance above level 60 |
+        Cannot proc from a spell cast by an item
+    </system:String>
+    <system:String x:Key="trinity_effect_mask_strings">
+        Effect 1 |
+        Effect 2 |
+        Effect 3
+    </system:String>
+    <system:String x:Key="trinity_custom_attr_strings">
+        Enchant proc |
+        Cone back |
+        Cone line |
+        Share damage |
+        No initial threat |
+        Aura is crowd control |
+        Does not break stealth |
+        Can crit |
+        Direct damage |
+        Charge |
+        Pickpocket |
+        Rolling periodic |
+        Negative effect 1 |
+        Negative effect 2 |
+        Negative effect 3 |
+        Ignore armor |
+        Target must face caster |
+        Caster must be behind target |
+        Allow in flight target |
+        Needs ammo data |
+        Binary spell |
+        Physical school counts as magic |
+        Deprecated liquid aura (do not reuse) |
+        Is talent (master branch only) |
+        Aura cannot be saved |
+        Can target any private object (master branch only)
+    </system:String>
+    <system:String x:Key="trinity_linked_type_strings">
+        Cast (negative effect removes instead) |
+        Hit |
+        Aura (negative effect applies immunity instead)
+    </system:String>
+    <system:String x:Key="trinity_spell_group_strings">
+        Elixir Battle |
+        Elixir Guardian |
+        Elixir Unstable |
+        Elixir Shattrath
     </system:String>
     <!--#endregion-->
     <!--#endregion-->

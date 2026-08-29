@@ -16,5 +16,7 @@
             </controls:Flyout>
         </controls:FlyoutsControl>
     </controls:MetroWindow.Flyouts>
-    <Grid Name="ConfigGrid"/>
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+        <Grid Name="ConfigGrid"/>
+    </ScrollViewer>
 </controls:MetroWindow>

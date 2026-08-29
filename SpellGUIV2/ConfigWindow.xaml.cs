@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
@@ -71,6 +72,8 @@ namespace SpellEditor
             // Bindings and directory settings, 2 rows
             ConfigGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             ConfigGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            // Optional TrinityCore world database row
+            ConfigGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             // Database type specific grid
             ConfigGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
@@ -137,6 +140,8 @@ namespace SpellEditor
             currentRow = BuildMpqConfig(ConfigGrid, currentRow);
 
             currentRow = BuildBindingsAndDbcUI(ConfigGrid, currentRow);
+
+            currentRow = BuildTrinityConfigUI(ConfigGrid, ++currentRow);
 
             ++currentRow;
             BuildSQLiteConfigUI(currentRow);
@@ -494,6 +499,145 @@ namespace SpellEditor
             return currentRow;
         }
 
+        /// <summary>A separate server to the one holding the DBC data, so it gets its own fields.</summary>
+        private int BuildTrinityConfigUI(Grid parent, int currentRow)
+        {
+            var grid = new Grid();
+            Grid.SetRow(grid, currentRow);
+            Grid.SetColumn(grid, 0);
+            Grid.SetColumnSpan(grid, 3);
+
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            for (var i = 0; i < 8; ++i)
+                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var margin = new Thickness(10, 5, 10, 5);
+            var header = new Label
+            {
+                Content = "TrinityCore 3.3.5 world database (optional)",
+                Margin = new Thickness(10, 20, 10, 5),
+                FontWeight = FontWeights.Bold
+            };
+
+            var enabledLabel = new Label { Content = "Enable TrinityCore tab:", Margin = margin };
+            var enabledCheckbox = new System.Windows.Controls.CheckBox
+            {
+                Margin = margin,
+                IsChecked = Config.TrinityEnabled,
+                VerticalAlignment = VerticalAlignment.Center,
+                ToolTip = "Adds a tab for editing the server side spell tables of a TrinityCore 3.3.5 world database. " +
+                    "This only works against a WotLK core, so leave it off for anything else."
+            };
+
+            var hostLabel = new Label { Content = "Hostname: ", Margin = margin };
+            var hostText = new TextBox { Text = Config.TrinityHost, MinWidth = 200, Margin = margin };
+            var portLabel = new Label { Content = "Port: ", Margin = margin };
+            var portText = new TextBox { Text = Config.TrinityPort, MinWidth = 200, Margin = margin };
+            var userLabel = new Label { Content = "Username: ", Margin = margin };
+            var userText = new TextBox { Text = Config.TrinityUser, MinWidth = 200, Margin = margin };
+            var passLabel = new Label { Content = "Password: ", Margin = margin };
+            var passText = new TextBox { Text = Config.TrinityPass, MinWidth = 200, Margin = margin };
+            var databaseLabel = new Label { Content = "World database: ", Margin = margin };
+            var databaseText = new TextBox { Text = Config.TrinityDatabase, MinWidth = 200, Margin = margin };
+
+            var confirmBtn = new TrinityConfirmButton(enabledCheckbox, hostText, portText, userText, passText, databaseText)
+            {
+                Content = "Save Changes",
+                Foreground = Brushes.Black,
+                Margin = new Thickness(3, 10, 3, 2),
+                MinHeight = 40
+            };
+            confirmBtn.Click += SaveTrinityConfirmBtn_Click;
+
+            var testBtn = new TrinityConfirmButton(enabledCheckbox, hostText, portText, userText, passText, databaseText)
+            {
+                Content = "Test Connection",
+                Foreground = Brushes.Black,
+                Margin = new Thickness(3, 10, 3, 2),
+                MinHeight = 40
+            };
+            testBtn.Click += TestTrinityConnection_Click;
+
+            var row = 0;
+            Grid.SetRow(header, row++);
+            Grid.SetColumn(header, 0);
+            Grid.SetColumnSpan(header, 3);
+
+            void AddPair(Label label, UIElement field)
+            {
+                Grid.SetRow(label, row);
+                Grid.SetColumn(label, 0);
+                Grid.SetRow(field, row++);
+                Grid.SetColumn(field, 1);
+                grid.Children.Add(label);
+                grid.Children.Add(field);
+            }
+
+            grid.Children.Add(header);
+            AddPair(enabledLabel, enabledCheckbox);
+            AddPair(hostLabel, hostText);
+            AddPair(portLabel, portText);
+            AddPair(userLabel, userText);
+            AddPair(passLabel, passText);
+            AddPair(databaseLabel, databaseText);
+
+            Grid.SetRow(confirmBtn, row);
+            Grid.SetColumn(confirmBtn, 1);
+            Grid.SetRow(testBtn, row);
+            Grid.SetColumn(testBtn, 2);
+            grid.Children.Add(confirmBtn);
+            grid.Children.Add(testBtn);
+
+            parent.Children.Add(grid);
+            return currentRow;
+        }
+
+        private void SaveTrinityConfirmBtn_Click(object sender, RoutedEventArgs e)
+        {
+            var button = sender as TrinityConfirmButton;
+            Config.TrinityHost = button.Host();
+            Config.TrinityPort = button.Port();
+            Config.TrinityUser = button.Username();
+            Config.TrinityPass = button.Pass();
+            Config.TrinityDatabase = button.Database();
+            // Set last, it is the flag the main window watches to show or hide the tab
+            Config.TrinityEnabled = button.Enabled();
+
+            (Application.Current.MainWindow as MainWindow)?.UpdateTrinityTabVisibility();
+            ShowFlyoutMessage("Saved config.xml - The TrinityCore tab connects the next time you open it");
+        }
+
+        private async void TestTrinityConnection_Click(object sender, RoutedEventArgs e)
+        {
+            var button = sender as TrinityConfirmButton;
+            button.IsEnabled = false;
+            try
+            {
+                var database = new Sources.TrinityCore.TrinityDatabase(button.Host(), button.Port(),
+                    button.Username(), button.Pass(), button.Database());
+                var missing = await System.Threading.Tasks.Task.Run(() =>
+                {
+                    database.TestConnection();
+                    return database.FindMissingTables(Sources.TrinityCore.TrinityTables.All.Select(table => table.Name));
+                });
+
+                ShowFlyoutMessage(missing.Count == 0
+                    ? $"Connected to {button.Database()} and found all the spell tables."
+                    : $"Connected to {button.Database()}, but these tables are missing: {string.Join(", ", missing)}");
+            }
+            catch (Exception exception)
+            {
+                Logger.Error(exception, "TrinityCore test connection failed");
+                ShowFlyoutMessage("Could not connect: " + exception.Message);
+            }
+            finally
+            {
+                button.IsEnabled = true;
+            }
+        }
+
         private void OpenDirButton_Click(object sender, RoutedEventArgs e)
         {
             var button = sender as ButtonWithLabelRef;
@@ -600,6 +744,35 @@ namespace SpellEditor
             public string Port() => _Port.Text;
 
             public string Database() => _Database.Text;
+        }
+
+        private class TrinityConfirmButton : Button
+        {
+            private readonly System.Windows.Controls.CheckBox _Enabled;
+            private readonly TextBox _Host, _Port, _User, _Pass, _Database;
+
+            public TrinityConfirmButton(System.Windows.Controls.CheckBox enabled, TextBox host, TextBox port,
+                TextBox user, TextBox pass, TextBox database)
+            {
+                _Enabled = enabled;
+                _Host = host;
+                _Port = port;
+                _User = user;
+                _Pass = pass;
+                _Database = database;
+            }
+
+            public bool Enabled() => _Enabled.IsChecked == true;
+
+            public string Host() => _Host.Text.Trim();
+
+            public string Port() => _Port.Text.Trim();
+
+            public string Username() => _User.Text.Trim();
+
+            public string Pass() => _Pass.Text;
+
+            public string Database() => _Database.Text.Trim();
         }
 
         private class SQLiteConfirmButton : Button

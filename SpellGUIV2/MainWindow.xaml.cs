@@ -41,6 +41,7 @@ using SpellEditor.Sources.Locale;
 using SpellEditor.Sources.SpellStringTools;
 using SpellEditor.Sources.Tools.SpellFamilyClassMaskStoreParser;
 using SpellEditor.Sources.Tools.VisualTools;
+using SpellEditor.Sources.TrinityCore;
 using SpellEditor.Sources.VersionControl;
 
 namespace SpellEditor
@@ -58,6 +59,10 @@ namespace SpellEditor
         private readonly List<ThreadSafeCheckBox> attributes5 = new List<ThreadSafeCheckBox>();
         private readonly List<ThreadSafeCheckBox> attributes6 = new List<ThreadSafeCheckBox>();
         private readonly List<ThreadSafeCheckBox> attributes7 = new List<ThreadSafeCheckBox>();
+        /// <summary>TrinityCore spell_custom_attr bits, shown next to the Spell.dbc attributes.</summary>
+        private readonly List<ThreadSafeCheckBox> customAttributes = new List<ThreadSafeCheckBox>();
+        /// <summary>The mask as read for the selected spell, null when it was never read.</summary>
+        private uint? loadedCustomAttributes;
         private readonly List<ThreadSafeCheckBox> stancesBoxes = new List<ThreadSafeCheckBox>();
         private readonly List<ThreadSafeCheckBox> targetCreatureTypeBoxes = new List<ThreadSafeCheckBox>();
         private readonly List<ThreadSafeCheckBox> targetBoxes = new List<ThreadSafeCheckBox>();
@@ -182,6 +187,8 @@ namespace SpellEditor
             miscValueDynamicContentsA = new[] { MiscValueA1DynamicContent, MiscValueA2DynamicContent, MiscValueA3DynamicContent };
             miscValueLabelB = new[] { LabMiscValueB1, LabMiscValueB2, LabMiscValueB3 };
             miscValueDynamicContentsB = new[] { MiscValueB1DynamicContent, MiscValueB2DynamicContent, MiscValueB3DynamicContent };
+
+            UpdateTrinityTabVisibility();
         }
 
         ~MainWindow()
@@ -336,6 +343,23 @@ namespace SpellEditor
 
                 Attributes8.Children.Add(box);
                 attributes7.Add(box);
+            }
+
+            // From spell_custom_attr rather than the DBC, see SaveCustomAttributes
+            CustomAttributes.Children.Clear();
+            customAttributes.Clear();
+            foreach (var flag in TrinityEnums.SpellCustomAttributes.Flags)
+            {
+                ThreadSafeCheckBox box = new ThreadSafeCheckBox
+                {
+                    Content = flag.Name,
+                    ToolTip = $"{flag.Name} (0x{flag.Value:X})",
+                    Tag = flag.Value,
+                    Margin = new Thickness(0, 5, 0, 0)
+                };
+
+                CustomAttributes.Children.Add(box);
+                customAttributes.Add(box);
             }
 
             CasterAuraState.Items.Clear();
@@ -861,6 +885,11 @@ namespace SpellEditor
 
         #region ConfigButton
         private ConfigWindow ConfigWindowInstance;
+
+        /// <summary>
+        /// Opens the settings window, used by panels that need the user to fill something in.
+        /// </summary>
+        public void ShowConfigWindow() => ConfigButtonClick(this, null);
 
         private void ConfigButtonClick(object sender, RoutedEventArgs e)
         {
@@ -1411,9 +1440,9 @@ namespace SpellEditor
                 var input = sender == Attributes1Search ? 
                     Attributes1Search.Text.ToLower() : 
                     Attributes2Search.Text.ToLower();
-                var controls = sender == Attributes1Search ? 
+                var controls = sender == Attributes1Search ?
                     new StackPanel[] { Attributes1, Attributes2, Attributes3, Attributes4 } :
-                    new StackPanel[] { Attributes5, Attributes6, Attributes7, Attributes8 };
+                    new StackPanel[] { Attributes5, Attributes6, Attributes7, Attributes8, CustomAttributes };
 
                 for (int i = 0; i < controls.Length; ++i)
                 {
@@ -2042,7 +2071,10 @@ namespace SpellEditor
                     // families are cheap to rebuild one at a time
                     spellFamilyClassMaskParser?.InvalidateAll();
 
-                    ShowFlyoutMessage($"Saved spell {selectedID}.");
+                    var savedCustomAttributes = SaveCustomAttributes(selectedID, out var customAttributeError);
+                    ShowFlyoutMessage(customAttributeError ?? (savedCustomAttributes
+                        ? $"Saved spell {selectedID} and its custom attributes."
+                        : $"Saved spell {selectedID}."));
 
                     SelectSpell.UpdateSpell(row);
                 }
@@ -2197,6 +2229,10 @@ namespace SpellEditor
                     return;
 
                 loadSpell(LoadSpellReporter, data);
+
+                // The tabs only reload once they are looked at, the attributes are not awaited
+                TrinityIntegrationInstance?.SetSpell(spellId);
+                _ = RefreshCustomAttributesAsync(spellId);
             }
             catch (Exception ex)
             {
@@ -4919,7 +4955,119 @@ namespace SpellEditor
                 uint.TryParse(idStr, out var id);
                 UpdateSpellVisualTab(id);
             }
+            else if (TrinityIntegrationInstance != null && TrinityIntegrationInstance.Owns(tab))
+            {
+                TrinityIntegrationInstance.Activate(tab);
+            }
         }
+
+        #region TrinityCore
+        private TrinityIntegration TrinityIntegrationInstance;
+
+        /// <summary>Hides the world tables unless the integration is turned on in the settings.</summary>
+        public void UpdateTrinityTabVisibility()
+        {
+            var visibility = TrinityDatabase.IsConfigured ? Visibility.Visible : Visibility.Collapsed;
+            CustomAttributesLabel.Visibility = visibility;
+            CustomAttributesScroll.Visibility = visibility;
+
+            if (TrinityIntegrationInstance == null)
+            {
+                if (!Config.TrinityEnabled)
+                    return;
+                TrinityIntegrationInstance = new TrinityIntegration(this, MainTabControl);
+            }
+            TrinityIntegrationInstance.UpdateTabs();
+        }
+
+        /// <summary>A null mask means the read never happened, so nothing is written back.</summary>
+        private async Task RefreshCustomAttributesAsync(uint spellId)
+        {
+            loadedCustomAttributes = null;
+            ApplyCustomAttributes(0);
+            if (customAttributes.Count == 0)
+                return;
+
+            uint? mask = null;
+            if (spellId != 0 && TrinityDatabase.IsConfigured && TrinityIntegrationInstance != null)
+            {
+                mask = await Task.Run(() =>
+                {
+                    var database = TrinityIntegrationInstance.EnsureDatabase();
+                    if (database == null)
+                        return (uint?)null;
+                    try
+                    {
+                        var value = database.QuerySingleValue(
+                            $"SELECT `attributes` FROM `spell_custom_attr` WHERE `entry` = {spellId} LIMIT 1");
+                        return value == null ? 0u : Convert.ToUInt32(value);
+                    }
+                    catch (Exception exception)
+                    {
+                        Logger.Error(exception, "Failed to read spell_custom_attr");
+                        return (uint?)null;
+                    }
+                });
+            }
+
+            if (spellId != selectedID)
+                return;
+
+            loadedCustomAttributes = mask;
+            ApplyCustomAttributes(mask ?? 0);
+            foreach (var box in customAttributes)
+                box.IsEnabled = mask.HasValue;
+        }
+
+        private void ApplyCustomAttributes(uint mask)
+        {
+            foreach (var box in customAttributes)
+                box.IsChecked = (mask & (uint)box.Tag) != 0;
+        }
+
+        private uint GetCustomAttributesMask()
+        {
+            uint mask = 0;
+            foreach (var box in customAttributes)
+            {
+                if (box.IsChecked == true)
+                    mask |= (uint)box.Tag;
+            }
+            return mask;
+        }
+
+        /// <summary>Never throws, a world database that is down must not undo a good DBC save.</summary>
+        private bool SaveCustomAttributes(uint spellId, out string error)
+        {
+            error = null;
+            if (!loadedCustomAttributes.HasValue || spellId == 0)
+                return false;
+
+            var mask = GetCustomAttributesMask();
+            if (mask == loadedCustomAttributes.Value)
+                return false;
+
+            try
+            {
+                var database = TrinityIntegrationInstance?.EnsureDatabase();
+                if (database == null)
+                    throw new Exception(SafeTryFindResource("trinity_custom_attr_unavailable"));
+
+                database.Execute(mask == 0
+                    ? $"DELETE FROM `spell_custom_attr` WHERE `entry` = {spellId}"
+                    : $"INSERT INTO `spell_custom_attr` (`entry`, `attributes`) VALUES ({spellId}, {mask}) " +
+                      $"ON DUPLICATE KEY UPDATE `attributes` = {mask}");
+                loadedCustomAttributes = mask;
+                return true;
+            }
+            catch (Exception exception)
+            {
+                Logger.Error(exception, "Failed to save spell_custom_attr");
+                error = string.Format(SafeTryFindResource("trinity_custom_attr_save_failed"), exception.Message);
+                return false;
+            }
+        }
+        #endregion
 
         private async void SelectSpell_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
@@ -5383,6 +5531,10 @@ namespace SpellEditor
             string path = $"pack://SiteOfOrigin:,,,/Languages/{language}.xaml";
             System.Windows.Application.Current.Resources.MergedDictionaries[0].Source = new Uri(path);
             Config.Language = language;
+            // The TrinityCore flag and tooltip labels are cached, drop them so they are read again
+            TrinityEnums.InvalidateLocalisation();
+            UpdateTrinityTabVisibility();
+            TrinityIntegrationInstance?.RefreshLocalisation();
             RefreshAllUIElements();
         }
 
@@ -5677,6 +5829,172 @@ namespace SpellEditor
 
             }
         }
+
+        #region Effect copy and reset
+
+        /// <summary>
+        /// What an unused effect looks like in Spell.dbc. Everything is zeroed apart from the
+        /// damage multiplier, which Blizzard leaves at 1 on the effects they are not using.
+        /// The key is the column name without the effect number on the end.
+        /// </summary>
+        private static readonly Dictionary<string, string> EmptyEffectValues = new Dictionary<string, string>
+        {
+            { "Effect", "0" },
+            { "EffectDieSides", "0" },
+            { "EffectRealPointsPerLevel", "0" },
+            { "EffectBasePoints", "0" },
+            { "EffectMechanic", "0" },
+            { "EffectImplicitTargetA", "0" },
+            { "EffectImplicitTargetB", "0" },
+            { "EffectRadiusIndex", "0" },
+            { "EffectApplyAuraName", "0" },
+            { "EffectAmplitude", "0" },
+            { "EffectMultipleValue", "0" },
+            { "EffectChainTarget", "0" },
+            { "EffectItemType", "0" },
+            { "EffectMiscValue", "0" },
+            { "EffectMiscValueB", "0" },
+            { "EffectTriggerSpell", "0" },
+            { "EffectPointsPerComboPoint", "0" },
+            { "EffectSpellClassMaskA", "0" },
+            { "EffectSpellClassMaskB", "0" },
+            { "EffectSpellClassMaskC", "0" },
+            { "EffectDamageMultiplier", "1" },
+            { "EffectBonusMultiplier", "0" }
+        };
+
+        private int EffectIndexOfButton(object sender)
+        {
+            if (sender == EffectCopyFrom1 || sender == EffectReset1)
+                return 1;
+            if (sender == EffectCopyFrom2 || sender == EffectReset2)
+                return 2;
+            return 3;
+        }
+
+        private void EffectCopyFrom_Click(object sender, RoutedEventArgs e)
+        {
+            if (adapter == null || selectedID == 0)
+                return;
+
+            var effectIndex = EffectIndexOfButton(sender);
+            var dialog = new SpellPickerDialog(this, selectedID,
+                string.Format(SafeTryFindResource("effectCopyFromPrompt"), effectIndex));
+            if (dialog.ShowDialog() != true || dialog.SelectedId == 0)
+                return;
+
+            try
+            {
+                using (var data = adapter.Query($"SELECT * FROM `spell` WHERE `ID` = '{dialog.SelectedId}' LIMIT 1"))
+                {
+                    if (data.Rows.Count == 0)
+                    {
+                        HandleErrorMessage(string.Format(SafeTryFindResource("effectCopyFromMissing"), dialog.SelectedId));
+                        return;
+                    }
+                    var source = data.Rows[0];
+                    // The same effect number is taken from the other spell, so effect 2 copies
+                    // from effect 2
+                    ApplyEffect(effectIndex, column => source[column + effectIndex].ToString());
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Failed to copy an effect from another spell");
+                HandleErrorMessage(ex.Message);
+            }
+        }
+
+        private void EffectReset_Click(object sender, RoutedEventArgs e)
+        {
+            ApplyEffect(EffectIndexOfButton(sender), column => EmptyEffectValues[column]);
+        }
+
+        /// <summary>
+        /// Fills one effect tab from a set of Spell.dbc values. The reader is handed a column name
+        /// without the effect number on the end, so the same code can fill the tab from another
+        /// spell or from the blank effect defaults. Nothing is written to the database here, the
+        /// values sit in the controls until the spell is saved.
+        /// </summary>
+        private void ApplyEffect(int effectIndex, Func<string, string> read)
+        {
+            var i = effectIndex - 1;
+            var isTbcOrGreater = WoWVersionManager.IsTbcOrGreaterSelected;
+            var isWotlkOrGreater = WoWVersionManager.IsWotlkOrGreaterSelected;
+
+            var dieSides = new[] { DieSides1, DieSides2, DieSides3 };
+            var pointsPerLevel = new[] { BasePointsPerLevel1, BasePointsPerLevel2, BasePointsPerLevel3 };
+            var basePoints = new[] { BasePoints1, BasePoints2, BasePoints3 };
+            var mechanics = new[] { Mechanic1, Mechanic2, Mechanic3 };
+            var targetsA = new[] { TargetA1, TargetA2, TargetA3 };
+            var targetsB = new[] { TargetB1, TargetB2, TargetB3 };
+            var radiuses = new[] { RadiusIndex1, RadiusIndex2, RadiusIndex3 };
+            var perComboPoint = new[] { PointsPerComboPoint1, PointsPerComboPoint2, PointsPerComboPoint3 };
+            var damageMultipliers = new[] { EffectDamageMultiplier1, EffectDamageMultiplier2, EffectDamageMultiplier3 };
+            var bonusMultipliers = new[] { EffectBonusMultiplier1, EffectBonusMultiplier2, EffectBonusMultiplier3 };
+
+            var effectType = int.Parse(read("Effect"));
+            var auraType = int.Parse(read("EffectApplyAuraName"));
+
+            // The combo boxes write straight back to the database as soon as the user picks
+            // something, so hold them off while a whole effect goes in at once
+            var wasUpdating = updating;
+            updating = true;
+            try
+            {
+                spellEffectTypeBoxes[i].SetTextFromIndex((uint)effectType);
+                effectAuraNameBoxes[i].SetTextFromIndex((uint)auraType);
+                dieSides[i].ThreadSafeText = read("EffectDieSides");
+                pointsPerLevel[i].ThreadSafeText = read("EffectRealPointsPerLevel");
+                basePoints[i].ThreadSafeText = read("EffectBasePoints");
+                mechanics[i].ThreadSafeIndex = int.Parse(read("EffectMechanic"));
+                targetsA[i].ThreadSafeIndex = int.Parse(read("EffectImplicitTargetA"));
+                targetsB[i].ThreadSafeIndex = int.Parse(read("EffectImplicitTargetB"));
+
+                var loadRadiuses = (SpellRadius)DBCManager.GetInstance().FindDbcForBinding("SpellRadius");
+                radiuses[i].ThreadSafeIndex = loadRadiuses.UpdateRadiusIndexes(uint.Parse(read("EffectRadiusIndex")));
+
+                effectAmplitudeBoxes[i].ThreadSafeText = read("EffectAmplitude");
+                effectMultipleValueBoxes[i].ThreadSafeText = read("EffectMultipleValue");
+                effectChainTargetBoxes[i].ThreadSafeText = read("EffectChainTarget");
+                effectItemTypeBoxes[i].ThreadSafeText = read("EffectItemType");
+                perComboPoint[i].ThreadSafeText = read("EffectPointsPerComboPoint");
+                damageMultipliers[i].ThreadSafeText = read("EffectDamageMultiplier");
+                if (isWotlkOrGreater)
+                    bonusMultipliers[i].ThreadSafeText = read("EffectBonusMultiplier");
+
+                effectTriggerSpells[i] = uint.Parse(read("EffectTriggerSpell"));
+                effectTriggerSpellBoxes[i].Content = GetSpellDescString(effectTriggerSpells[i]);
+
+                // Rebuilding the misc value control first, otherwise the value goes into whatever
+                // control the previous effect type left behind
+                SetupMiscValueControl(effectIndex, effectType, auraType);
+                SetMiscValue(effectIndex, 1, int.Parse(read("EffectMiscValue")));
+                if (isTbcOrGreater)
+                    SetMiscValue(effectIndex, 2, int.Parse(read("EffectMiscValueB")));
+
+                if (isWotlkOrGreater)
+                {
+                    familyFlagsA[i] = uint.Parse(read("EffectSpellClassMaskA"));
+                    familyFlagsB[i] = uint.Parse(read("EffectSpellClassMaskB"));
+                    familyFlagsC[i] = uint.Parse(read("EffectSpellClassMaskC"));
+                }
+            }
+            finally
+            {
+                updating = wasUpdating;
+            }
+
+            GenerateSpellEffectHeader(effectIndex);
+            if (isWotlkOrGreater)
+            {
+                var familyName = SpellFamilyName.GetNumberPrefixFromText();
+                Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+                    spellFamilyClassMaskParser.UpdateAllEffectFamiliesLists(this, familyName, adapter)));
+            }
+        }
+
+        #endregion
 
         private void Category_SelectionEffectivelyChanged(object sender, SelectionEffectivelyChangedEventArgs e)
         {

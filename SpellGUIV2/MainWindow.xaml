@@ -536,6 +536,9 @@
                                 <Label Content="{DynamicResource labEffectBonusMultiplier1}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="471,197,0,0"/>
                                 <c2:ThreadSafeTextBox x:Name="EffectBonusMultiplier1" VerticalAlignment="Top" HorizontalAlignment="Left" Height="23" Margin="610,197,0,0" Width="300" TextWrapping="Wrap"/>
 
+                                <Button x:Name="EffectCopyFrom1" Content="{DynamicResource effectCopyFrom}" ToolTip="{DynamicResource effectCopyFromTip}" VerticalAlignment="Top" HorizontalAlignment="Left" Height="30" Margin="152,455,0,0" Width="145" Click="EffectCopyFrom_Click"/>
+                                <Button x:Name="EffectReset1" Content="{DynamicResource effectReset}" ToolTip="{DynamicResource effectResetTip}" VerticalAlignment="Top" HorizontalAlignment="Left" Height="30" Margin="307,455,0,0" Width="145" Click="EffectReset_Click"/>
+
                                 <Label Content="{DynamicResource targetClassMaskSpells}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="471,321,0,0"/>
                                 <ListBox x:Name="EffectSpellFamiliesList1" VerticalAlignment="Top" HorizontalAlignment="Left" Height="235" Margin="610,228,0,0" Width="300" BorderThickness="1"/>
                                 <Button x:Name="EffectSpellsFamiliesButton1" VerticalAlignment="Top" Content="Edit Families" HorizontalAlignment="Left"  Height="30" Margin="610,468,0,0" Width="300" Click="EditEffectFamiliesButton_Click"/>
@@ -583,6 +586,9 @@
                                 <c2:ThreadSafeTextBox x:Name="EffectDamageMultiplier2" VerticalAlignment="Top" HorizontalAlignment="Left" Height="23" Margin="610,166,0,0" Width="300" TextWrapping="Wrap"/>
                                 <Label Content="{DynamicResource labEffectBonusMultiplier2}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="471,197,0,0"/>
                                 <c2:ThreadSafeTextBox x:Name="EffectBonusMultiplier2" VerticalAlignment="Top" HorizontalAlignment="Left" Height="23" Margin="610,197,0,0" Width="300" TextWrapping="Wrap"/>
+
+                                <Button x:Name="EffectCopyFrom2" Content="{DynamicResource effectCopyFrom}" ToolTip="{DynamicResource effectCopyFromTip}" VerticalAlignment="Top" HorizontalAlignment="Left" Height="30" Margin="152,455,0,0" Width="145" Click="EffectCopyFrom_Click"/>
+                                <Button x:Name="EffectReset2" Content="{DynamicResource effectReset}" ToolTip="{DynamicResource effectResetTip}" VerticalAlignment="Top" HorizontalAlignment="Left" Height="30" Margin="307,455,0,0" Width="145" Click="EffectReset_Click"/>
 
                                 <Label Content="{DynamicResource targetClassMaskSpells}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="471,321,0,0"/>
                                 <ListBox x:Name="EffectSpellFamiliesList2" VerticalAlignment="Top" HorizontalAlignment="Left" Height="235" Margin="610,228,0,0" Width="300" BorderThickness="1"/>
@@ -632,6 +638,9 @@
                                 <Label Content="{DynamicResource labEffectBonusMultiplier2}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="471,197,0,0"/>
                                 <c2:ThreadSafeTextBox x:Name="EffectBonusMultiplier3" VerticalAlignment="Top" HorizontalAlignment="Left" Height="23" Margin="610,197,0,0" Width="300" TextWrapping="Wrap"/>
 
+
+                                <Button x:Name="EffectCopyFrom3" Content="{DynamicResource effectCopyFrom}" ToolTip="{DynamicResource effectCopyFromTip}" VerticalAlignment="Top" HorizontalAlignment="Left" Height="30" Margin="152,455,0,0" Width="145" Click="EffectCopyFrom_Click"/>
+                                <Button x:Name="EffectReset3" Content="{DynamicResource effectReset}" ToolTip="{DynamicResource effectResetTip}" VerticalAlignment="Top" HorizontalAlignment="Left" Height="30" Margin="307,455,0,0" Width="145" Click="EffectReset_Click"/>
 
                                 <Label Content="{DynamicResource targetClassMaskSpells}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="471,321,0,0"/>
                                 <ListBox x:Name="EffectSpellFamiliesList3" VerticalAlignment="Top" HorizontalAlignment="Left" Height="235" Margin="610,228,0,0" Width="300" BorderThickness="1"/>
@@ -788,6 +797,8 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/>
+                                    <!-- Auto so it takes no room when the custom attributes are collapsed -->
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <Label Content="Search: " HorizontalAlignment="Right" Margin="2" Grid.Row="0" Grid.Column="0"/>
                                 <c2:ThreadSafeTextBox x:Name="Attributes2Search" HorizontalAlignment="Left" MinWidth="150" Margin="2" Grid.Row="0" Grid.Column="1" KeyDown="_KeyDown" KeyUp="_KeyUp"/>
@@ -806,6 +817,10 @@
                                 <Label Content="{DynamicResource labAttributesEx3}" HorizontalAlignment="Center" MinWidth="300" Margin="2" Grid.Row="1" Grid.Column="3"/>
                                 <ScrollViewer Margin="5" Grid.Row="2" Grid.Column="3">
                                     <StackPanel Name="Attributes8"/>
+                                </ScrollViewer>
+                                <Label x:Name="CustomAttributesLabel" Content="{DynamicResource labCustomAttributes}" ToolTip="{DynamicResource labCustomAttributesTip}" HorizontalAlignment="Center" MinWidth="300" Margin="2" Grid.Row="1" Grid.Column="4" Visibility="Collapsed"/>
+                                <ScrollViewer x:Name="CustomAttributesScroll" Margin="5" Grid.Row="2" Grid.Column="4" Visibility="Collapsed">
+                                    <StackPanel Name="CustomAttributes"/>
                                 </ScrollViewer>
                             </Grid>
                         </TabItem>

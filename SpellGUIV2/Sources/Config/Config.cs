@@ -173,6 +173,62 @@ namespace SpellEditor.Sources.Config
             }
         }
 
+        // Optional TrinityCore 3.3.5 world database, off by default and separate to the DBC one
+        public static bool TrinityEnabled
+        {
+            get { return "true".Equals(GetConfigValue("TrinityCore/Enabled")); }
+            set
+            {
+                UpdateConfigValue("TrinityCore/Enabled", value ? "true" : "false");
+                Save();
+            }
+        }
+        public static string TrinityHost
+        {
+            get { return GetConfigValue("TrinityCore/Host"); }
+            set
+            {
+                UpdateConfigValue("TrinityCore/Host", value);
+                Save();
+            }
+        }
+        public static string TrinityUser
+        {
+            get { return GetConfigValue("TrinityCore/Username"); }
+            set
+            {
+                UpdateConfigValue("TrinityCore/Username", value);
+                Save();
+            }
+        }
+        public static string TrinityPass
+        {
+            get { return GetConfigValue("TrinityCore/Password"); }
+            set
+            {
+                UpdateConfigValue("TrinityCore/Password", value);
+                Save();
+            }
+        }
+        public static string TrinityPort
+        {
+            get { return GetConfigValue("TrinityCore/Port"); }
+            set
+            {
+                UpdateConfigValue("TrinityCore/Port", value);
+                Save();
+            }
+        }
+        public static string TrinityDatabase
+        {
+            get { return GetConfigValue("TrinityCore/Database"); }
+            set
+            {
+                UpdateConfigValue("TrinityCore/Database", value);
+                Save();
+            }
+        }
+
         public static ConnectionType connectionType = ConnectionType.SQLite;
 
         private static void CreateXmlFile()
@@ -237,6 +293,24 @@ namespace SpellEditor.Sources.Config
             if (SqlMapperDirectory.Length == 0)
             {
                 SqlMapperDirectory = Environment.CurrentDirectory + "\\SqlMap\\AzerothCore";
+            }
+
+            // Defaults so the TrinityCore fields are not empty, it stays disabled until turned on
+            if (TrinityHost.Length == 0)
+            {
+                TrinityHost = "127.0.0.1";
+            }
+            if (TrinityPort.Length == 0)
+            {
+                TrinityPort = "3306";
+            }
+            if (TrinityUser.Length == 0)
+            {
+                TrinityUser = "trinity";
+            }
+            if (TrinityDatabase.Length == 0)
+            {
+                TrinityDatabase = "world";
             }
         }
 
