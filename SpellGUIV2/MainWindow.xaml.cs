@@ -79,7 +79,19 @@ namespace SpellEditor
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
         private IDatabaseAdapter adapter;
-        public uint selectedID;
+        private uint _selectedID;
+        /// <summary>Zero means nothing is selected, which hides every spell editing tab.</summary>
+        public uint selectedID
+        {
+            get => _selectedID;
+            set
+            {
+                if (_selectedID == value)
+                    return;
+                _selectedID = value;
+                UpdateSpellTabVisibility();
+            }
+        }
         public uint newIconID = 1;
         private bool updating;
         private readonly SpellStringParser SpellStringParser = new SpellStringParser();
@@ -119,6 +131,9 @@ namespace SpellEditor
         public uint[] familyFlagsC = new uint[3];
 
         private uint[] effectTriggerSpells = new uint[3];
+
+        // Everything that only makes sense with a spell selected
+        private TabItem[] spellEditorTabs;
 
         // Spell references outside of the effects: ModalNextSpell, CasterAuraSpell,
         // TargetAuraSpell, ExcludeCasterAuraSpell, ExcludeTargetAuraSpell
@@ -210,8 +225,9 @@ namespace SpellEditor
             miscValueDynamicContentsA = new[] { MiscValueA1DynamicContent, MiscValueA2DynamicContent, MiscValueA3DynamicContent };
             miscValueLabelB = new[] { LabMiscValueB1, LabMiscValueB2, LabMiscValueB3 };
             miscValueDynamicContentsB = new[] { MiscValueB1DynamicContent, MiscValueB2DynamicContent, MiscValueB3DynamicContent };
+            spellEditorTabs = new[] { BaseTab, Effects1Tab, Effects2Tab, ItemsTab, FlagsTab, IconTab, ReqsTab, VisualTab };
 
-            UpdateTrinityTabVisibility();
+            UpdateSpellTabVisibility();
         }
 
         ~MainWindow()
@@ -5039,6 +5055,8 @@ namespace SpellEditor
         {
             if (updating || adapter == null || !Config.IsInit || e.OriginalSource != MainTabControl)
                 return;
+            if (e.AddedItems.Count == 0)
+                return;
             var tab = e.AddedItems[0];
             if (tab == IconTab)
             {
@@ -5056,6 +5074,22 @@ namespace SpellEditor
             }
         }
 
+        /// <summary>There is nothing to edit until a spell is picked, so only the select tab stays up.</summary>
+        private void UpdateSpellTabVisibility()
+        {
+            if (spellEditorTabs == null)
+                return;
+
+            var visibility = _selectedID != 0 ? Visibility.Visible : Visibility.Collapsed;
+            foreach (var tab in spellEditorTabs)
+                tab.Visibility = visibility;
+
+            UpdateTrinityTabVisibility();
+
+            if (_selectedID == 0 && MainTabControl.SelectedIndex != 0)
+                MainTabControl.SelectedIndex = 0;
+        }
+
         #region TrinityCore
         private TrinityIntegration TrinityIntegrationInstance;
 
@@ -5068,11 +5102,11 @@ namespace SpellEditor
 
             if (TrinityIntegrationInstance == null)
             {
-                if (!Config.TrinityEnabled)
+                if (!TrinityDatabase.IsConfigured)
                     return;
                 TrinityIntegrationInstance = new TrinityIntegration(this, MainTabControl);
             }
-            TrinityIntegrationInstance.UpdateTabs();
+            TrinityIntegrationInstance.UpdateTabs(_selectedID != 0);
         }
 
         /// <summary>A null mask means the read never happened, so nothing is written back.</summary>

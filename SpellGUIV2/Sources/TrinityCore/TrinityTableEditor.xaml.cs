@@ -1065,7 +1065,10 @@ namespace SpellEditor.Sources.TrinityCore
         private void SetStatus(string message, bool isError)
         {
             StatusText.Text = message ?? string.Empty;
-            StatusText.Foreground = isError ? Brushes.OrangeRed : SystemColors.ControlTextBrush;
+            if (isError)
+                StatusText.Foreground = Brushes.OrangeRed;
+            else
+                StatusText.ClearValue(TextBlock.ForegroundProperty);
         }
         #endregion
     }

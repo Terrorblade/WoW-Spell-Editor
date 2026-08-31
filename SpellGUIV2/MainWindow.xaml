@@ -15,7 +15,9 @@
     <controls:MetroWindow.Flyouts>
         <controls:FlyoutsControl>
             <controls:Flyout Name="Flyout" Position="Bottom" Height="65" AutoCloseInterval="1700" IsAutoCloseEnabled="true" IsPinned="false">
-                <TextBlock Name="FlyoutText" Text="Placeholder" FontSize ="20" VerticalAlignment="Center"/>
+                <TextBlock Name="FlyoutText" Text="Placeholder" FontSize="20" VerticalAlignment="Center"
+                           Margin="10,0,10,0" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource MahApps.Brushes.ThemeForeground}"/>
             </controls:Flyout>
         </controls:FlyoutsControl>
     </controls:MetroWindow.Flyouts>
@@ -331,7 +333,7 @@
                     </TabControl>
                 </Grid>
             </TabItem>
-            <TabItem Header="{DynamicResource Base}">
+            <TabItem Name="BaseTab" Header="{DynamicResource Base}">
                 <Grid Name="BaseTabGrid">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -484,7 +486,7 @@
                     </Grid>
                 </Grid>
             </TabItem>
-            <TabItem Header="{DynamicResource Effects1}">
+            <TabItem Name="Effects1Tab" Header="{DynamicResource Effects1}">
                 <Grid>
                     <Label Content="{DynamicResource labTargets}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="130,10,0,0"/>
                     <ScrollViewer Margin="7,41,962,38">
@@ -500,7 +502,7 @@
                     <c2:ThreadSafeTextBox x:Name="ProcChance" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="817.5,262,0,0" Width="90" TextWrapping="Wrap"/>
                 </Grid>
             </TabItem>
-            <TabItem Header="{DynamicResource Effects2}">
+            <TabItem Name="Effects2Tab" Header="{DynamicResource Effects2}">
                 <Grid>
                     <TabControl VerticalAlignment="Top" HorizontalAlignment="Left" Height="647" Width="1276">
                         <TabItem Header="{DynamicResource SpellEffects1}" x:Name="effect1TabItem" Width="250" MaxWidth="250">
@@ -667,7 +669,7 @@
                     </TabControl>
                 </Grid>
             </TabItem>
-            <TabItem Header="{DynamicResource Items}">
+            <TabItem Name="ItemsTab" Header="{DynamicResource Items}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="AUTO"/>
@@ -740,7 +742,7 @@
                     <c2:ThreadSafeTextBox x:Name="ReagentCount8" Margin="5" Width="120" TextWrapping="Wrap" Grid.Row="9" Grid.Column="3"/>
                 </Grid>
             </TabItem>
-            <TabItem Header="{DynamicResource Flags}">
+            <TabItem Name="FlagsTab" Header="{DynamicResource Flags}">
                 <Grid>
                     <TabControl VerticalAlignment="Top" HorizontalAlignment="Left">
                         <TabItem Header="{DynamicResource Interrupts}">
@@ -783,19 +785,19 @@
                                 </Grid.ColumnDefinitions>
                                 <Label Content="Search: " HorizontalAlignment="Right" Margin="2" Grid.Row="0" Grid.Column="0"/>
                                 <c2:ThreadSafeTextBox x:Name="Attributes1Search" HorizontalAlignment="Left" MinWidth="150" Margin="2" Grid.Row="0" Grid.Column="1" KeyDown="_KeyDown" KeyUp="_KeyUp"/>
-                                <Label Content="{DynamicResource labAttributes}" HorizontalAlignment="Center" MinWidth="300" Margin="2" Grid.Row="1" Grid.Column="0"/>
+                                <Label Content="{DynamicResource labAttributes}" HorizontalAlignment="Center" Margin="2" Grid.Row="1" Grid.Column="0"/>
                                 <ScrollViewer Margin="5" Grid.Row="2" Grid.Column="0" MinWidth="100">
                                     <StackPanel Name="Attributes1"/>
                                 </ScrollViewer>
-                                <Label Content="{DynamicResource labAttributesEx}" HorizontalAlignment="Center" MinWidth="300" Margin="2" Grid.Row="1" Grid.Column="1"/>
+                                <Label Content="{DynamicResource labAttributesEx}" HorizontalAlignment="Center" Margin="2" Grid.Row="1" Grid.Column="1"/>
                                 <ScrollViewer Margin="5" Grid.Row="2" Grid.Column="1">
                                     <StackPanel Name="Attributes2"/>
                                 </ScrollViewer>
-                                <Label Content="{DynamicResource labAttributesEx2}" HorizontalAlignment="Center" MinWidth="300" Margin="2" Grid.Row="1" Grid.Column="2"/>
+                                <Label Content="{DynamicResource labAttributesEx2}" HorizontalAlignment="Center" Margin="2" Grid.Row="1" Grid.Column="2"/>
                                 <ScrollViewer Margin="5" MaxWidth="300" Grid.Row="2" Grid.Column="2">
                                     <StackPanel Name="Attributes3"/>
                                 </ScrollViewer>
-                                <Label Content="{DynamicResource labAttributesEx3}" HorizontalAlignment="Center" MinWidth="300" Margin="2" Grid.Row="1" Grid.Column="3"/>
+                                <Label Content="{DynamicResource labAttributesEx3}" HorizontalAlignment="Center" Margin="2" Grid.Row="1" Grid.Column="3"/>
                                 <ScrollViewer Margin="5" Grid.Row="2" Grid.Column="3">
                                     <StackPanel Name="Attributes4"/>
                                 </ScrollViewer>
@@ -813,29 +815,30 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/>
-                                    <!-- Auto so it takes no room when the custom attributes are collapsed -->
-                                    <ColumnDefinition Width="Auto"/>
+                                    <!-- Auto so it takes no room when the custom attributes are collapsed,
+                                         capped so it cannot squeeze the four DBC columns -->
+                                    <ColumnDefinition Width="Auto" MaxWidth="260"/>
                                 </Grid.ColumnDefinitions>
                                 <Label Content="Search: " HorizontalAlignment="Right" Margin="2" Grid.Row="0" Grid.Column="0"/>
                                 <c2:ThreadSafeTextBox x:Name="Attributes2Search" HorizontalAlignment="Left" MinWidth="150" Margin="2" Grid.Row="0" Grid.Column="1" KeyDown="_KeyDown" KeyUp="_KeyUp"/>
-                                <Label Content="{DynamicResource labAttributes}" HorizontalAlignment="Center" MinWidth="250" Margin="2" Grid.Row="1" Grid.Column="0"/>
+                                <Label Content="{DynamicResource labAttributesEx4}" HorizontalAlignment="Center" Margin="2" Grid.Row="1" Grid.Column="0"/>
                                 <ScrollViewer Margin="5" Grid.Row="2" Grid.Column="0" MinWidth="100">
                                     <StackPanel Name="Attributes5"/>
                                 </ScrollViewer>
-                                <Label Content="{DynamicResource labAttributesEx}" HorizontalAlignment="Center" MinWidth="300" Margin="2" Grid.Row="1" Grid.Column="1"/>
+                                <Label Content="{DynamicResource labAttributesEx5}" HorizontalAlignment="Center" Margin="2" Grid.Row="1" Grid.Column="1"/>
                                 <ScrollViewer Margin="5" Grid.Row="2" Grid.Column="1">
                                     <StackPanel Name="Attributes6"/>
                                 </ScrollViewer>
-                                <Label Content="{DynamicResource labAttributesEx2}" HorizontalAlignment="Center" MinWidth="300" Margin="2" Grid.Row="1" Grid.Column="2"/>
+                                <Label Content="{DynamicResource labAttributesEx6}" HorizontalAlignment="Center" Margin="2" Grid.Row="1" Grid.Column="2"/>
                                 <ScrollViewer Margin="5" MaxWidth="300" Grid.Row="2" Grid.Column="2">
                                     <StackPanel Name="Attributes7"/>
                                 </ScrollViewer>
-                                <Label Content="{DynamicResource labAttributesEx3}" HorizontalAlignment="Center" MinWidth="300" Margin="2" Grid.Row="1" Grid.Column="3"/>
+                                <Label Content="{DynamicResource labAttributesEx7}" HorizontalAlignment="Center" Margin="2" Grid.Row="1" Grid.Column="3"/>
                                 <ScrollViewer Margin="5" Grid.Row="2" Grid.Column="3">
                                     <StackPanel Name="Attributes8"/>
                                 </ScrollViewer>
-                                <Label x:Name="CustomAttributesLabel" Content="{DynamicResource labCustomAttributes}" ToolTip="{DynamicResource labCustomAttributesTip}" HorizontalAlignment="Center" MinWidth="300" Margin="2" Grid.Row="1" Grid.Column="4" Visibility="Collapsed"/>
-                                <ScrollViewer x:Name="CustomAttributesScroll" Margin="5" Grid.Row="2" Grid.Column="4" Visibility="Collapsed">
+                                <Label x:Name="CustomAttributesLabel" Content="{DynamicResource labCustomAttributes}" ToolTip="{DynamicResource labCustomAttributesTip}" HorizontalAlignment="Center" Margin="2" Grid.Row="1" Grid.Column="4" Visibility="Collapsed"/>
+                                <ScrollViewer x:Name="CustomAttributesScroll" Margin="5" Grid.Row="2" Grid.Column="4" Visibility="Collapsed" HorizontalScrollBarVisibility="Auto">
                                     <StackPanel Name="CustomAttributes"/>
                                 </ScrollViewer>
                             </Grid>
@@ -923,7 +926,7 @@
                     </ItemsControl>
                 </Grid>
             </TabItem>
-            <TabItem Header="{DynamicResource Reqs}">
+            <TabItem Name="ReqsTab" Header="{DynamicResource Reqs}">
                 <Grid Name="RequirementsTabGrid" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>

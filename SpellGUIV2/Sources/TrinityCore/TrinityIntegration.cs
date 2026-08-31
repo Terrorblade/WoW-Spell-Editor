@@ -25,6 +25,7 @@ namespace SpellEditor.Sources.TrinityCore
         private TrinityDatabase _database;
         private List<string> _missingTables = new List<string>();
         private uint _spellId;
+        private bool _spellSelected;
         private bool _connecting;
         private bool _probedTables;
         private string _lastConnectError;
@@ -37,9 +38,15 @@ namespace SpellEditor.Sources.TrinityCore
 
         public bool Owns(object tab) => tab is TabItem item && _tabs.Contains(item);
 
-        public void UpdateTabs()
+        public void UpdateTabs(bool spellSelected)
         {
-            if (!Config.Config.TrinityEnabled)
+            _spellSelected = spellSelected;
+            UpdateTabs();
+        }
+
+        private void UpdateTabs()
+        {
+            if (!TrinityDatabase.IsConfigured || !_spellSelected)
             {
                 foreach (var tab in _tabs)
                     tab.Visibility = Visibility.Collapsed;
